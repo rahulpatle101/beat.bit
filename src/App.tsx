@@ -12,7 +12,8 @@ import { DISTRICTS } from '@/scene/city'
 import { useArcade } from '@/hooks/useArcade'
 import { useEffect, useState } from 'react'
 import type { AudioStatus } from '@/audio/engine'
-import { STARTER_KITS, kitById } from '@/data/kits'
+import { KITS, kitById } from '@/data/kits'
+import { FEATURES } from '@/config/features'
 import { useSequencer } from '@/hooks/useSequencer'
 
 const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'default' | 'destructive' }> = {
@@ -23,12 +24,22 @@ const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'defau
 
 export default function App() {
   const seq = useSequencer()
+  // V3.1: the Arcade layer stays in the code but is hidden behind a disabled feature flag.
+  // With the flag off nothing can start a challenge, so the hook stays idle (no listeners run).
   const arcade = useArcade(seq)
   const av = arcade.view
-  const inChallenge = av.phase === 'running'
+  const inChallenge = FEATURES.arcade && av.phase === 'running'
   const status = STATUS[seq.audioStatus]
   const rank = rankFor(av.progress.xp)
-  const power = av.phase === 'running' ? av.districts : av.phase === 'results' ? (av.results && av.results.stars >= 1 ? DISTRICTS : av.districts) : null
+  const power = !FEATURES.arcade
+    ? null
+    : av.phase === 'running'
+      ? av.districts
+      : av.phase === 'results'
+        ? av.results && av.results.stars >= 1
+          ? DISTRICTS
+          : av.districts
+        : null
   const { onRemix } = seq
 
   // Remix die: rollKey changes on every roll; rollSize = how many cells it changed.
@@ -43,12 +54,14 @@ export default function App() {
             <h1 className="retro text-lg text-ink sm:text-xl">BEAT.BIT</h1>
             <span className="retro hidden text-[10px] text-ink-dim sm:inline">DAY 001 / 100</span>
           </div>
-          <p className="text-sm text-ink-dim">Make funky tunes. Wake the city.</p>
+          <p className="text-sm text-ink-dim">A living music toy. Press play, remix, and watch the city move.</p>
         </div>
         <div className="flex flex-wrap items-center gap-5">
-          <Badge variant="outline" className="text-[10px]" aria-label={`Rank ${rank.name}, ${av.progress.xp} XP`}>
-            {rank.name}
-          </Badge>
+          {FEATURES.arcade && (
+            <Badge variant="outline" className="text-[10px]" aria-label={`Rank ${rank.name}, ${av.progress.xp} XP`}>
+              {rank.name}
+            </Badge>
+          )}
           <Badge variant={status.variant} className="text-[10px]">
             {status.label}
           </Badge>
@@ -90,18 +103,20 @@ export default function App() {
           </Alert>
         )}
 
-        {av.phase === 'idle' && <ArcadeStart view={av} onStart={arcade.start} onAssist={arcade.toggleAssist} />}
-        {av.phase === 'running' && <ArcadeHud view={av} onQuit={arcade.quit} />}
-        {av.phase === 'results' && <ArcadeResults view={av} onRetry={arcade.start} onSandbox={arcade.backToSandbox} />}
+        {FEATURES.arcade && av.phase === 'idle' && <ArcadeStart view={av} onStart={arcade.start} onAssist={arcade.toggleAssist} />}
+        {FEATURES.arcade && av.phase === 'running' && <ArcadeHud view={av} onQuit={arcade.quit} />}
+        {FEATURES.arcade && av.phase === 'results' && (
+          <ArcadeResults view={av} onRetry={arcade.start} onSandbox={arcade.backToSandbox} />
+        )}
 
-        {!inChallenge && av.phase !== 'results' && (
+        {!inChallenge && !(FEATURES.arcade && av.phase === 'results') && (
         <Card>
             <CardContent className="px-4 py-2 sm:px-6">
               <TransportControls
                 playing={seq.playing}
                 bpm={seq.bpm}
                 kitId={seq.kitId}
-                unlocked={STARTER_KITS}
+                unlocked={KITS.map((k) => k.id)}
                 edited={seq.edited}
                 canUndo={seq.canUndo}
                 rollKey={roll.key}
@@ -144,11 +159,11 @@ export default function App() {
               <Kbd>←</Kbd>
               <Kbd>→</Kbd>
               <Kbd>↑</Kbd>
-              <Kbd>↓</Kbd> move ·<Kbd>SPACE</Kbd> toggle ·<Kbd>TAB</Kbd> controls · REMIX rolls a
-              variation
+              <Kbd>↓</Kbd> move ·<Kbd>SPACE</Kbd> toggle ·<Kbd>TAB</Kbd> controls · switch kits or REMIX
+              and watch the city
             </span>
             <span className="sm:hidden">
-              Press PLAY. Tap squares to change the beat, or REMIX to roll a variation.
+              Press PLAY. Switch kits, tap squares, or REMIX, and watch the city respond.
             </span>
           </p>
         )}

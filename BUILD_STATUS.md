@@ -194,6 +194,35 @@
 | A5 | Low | The test scripts assumed button order (fixed). The dev-server background wrapper sometimes reports failure while Vite runs. |
 | — | [—] | Not verified: real devices, VoiceOver, human playtest of the difficulty curve |
 
+
+### V3.1 — Living Music Toy simplification (2026-11-24, ✅ built, ⏳ awaiting review)
+
+**Scope:**
+- Sandbox only. The Arcade is hidden behind `FEATURES.arcade` (off; code and tests kept).
+- No locked kits, one primary PLAY/STOP, and new first-time copy.
+- Documentation: DESIGN V3.1, GAME_DESIGN parked, V2_ROADMAP Part 6 (V3.2 visual-polish proposal).
+
+**Verification** [B] production build in Chrome · [T] unit tests
+
+| Check | Result |
+|---|---|
+| Arcade hidden | ✅ No challenge card, rank, XP, stars, or pads. F/J inert. `beatbit.progress.v1` never written. |
+| Kits | ✅ All four selectable, with no disabled items. Switching while playing changes BPM (132 / 124 / 150 / 112), backing, mood, and announcement. |
+| First-time loop | ✅ Single primary button (PLAY). First sound 322 ms after the click (includes audio start). Full loop audible (peak 0.289). Backing continues with the drums cleared (0.192). |
+| Remix / Undo / Clear | ✅ Remix ×3 changes the grid. Undo ×3 restores it exactly. Clear empties; Undo restores. Silence after Stop. |
+| Performers / timing | ✅ NEON DRIVE grid steps (kick 0,7,10 · snare 4,7,12,14 · hat all · clap 12), 0-frame lag. 180 BPM 82.57 ms (exp 83.33; within frame jitter). 21 rapid toggles → idle, no stuck poses. |
+| Reduced motion | ✅ Reactions on the same steps, 0 Stomper squash frames |
+| Keyboard / a11y | ✅ Tab sweep PLAY → Tempo → kit picker → REMIX → CLEAR → grid, focus ring on all. Grid arrows. Scene description present, canvas `aria-hidden`. |
+| Mobile | ✅ No overflow at 320 / 375 / 390 px (grid cells 26 / 33 / 35 px) |
+| Unit tests | ✅ 60/60 (Arcade tests kept) |
+
+**Bundle:** JS 381.6 KB (122 KB gzip). The dormant Arcade code is still bundled (kept by request). Removing it from the build would be a later optimisation.
+
+**Open:**
+- Your review of the simplified flow.
+- The V3.2 decisions in V2_ROADMAP Part 6.
+- Earlier carry-overs: phone cells below 36 px at 375 px (33 px), no real-device or VoiceOver test, nobody has listened yet.
+
 ## How findings were verified
 
 | Tag | Meaning |

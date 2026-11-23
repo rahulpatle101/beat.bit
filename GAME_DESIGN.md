@@ -1,6 +1,7 @@
 # BEAT.BIT — Game Design
 
-**Status:** ⏳ PROPOSED on 2026-11-23, for review. Design only; nothing is built.
+**Status:** ⏸ **PARKED (2026-11-24, V3.1).** The product direction is now a *living music toy*, not a scoring game. The V3.0 Arcade slice (Wake the City, XP, stars, ranks) remains in the code behind the disabled feature flag `FEATURES.arcade`. Nothing here is on the active roadmap.
+*(Originally proposed on 2026-11-23.)*
 **Vision:** *A playful music arcade where people create original funky tunes, perform them, earn rewards, and unlock reactive pixel worlds.*
 **Companion docs:** [MUSIC_DIRECTION.md](MUSIC_DIRECTION.md) · [V2_ROADMAP.md → Part 5](V2_ROADMAP.md)
 

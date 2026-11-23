@@ -556,3 +556,38 @@ Tab order: PLAY → Tempo → **Groove picker** (one stop; ←/→ move, Enter/S
 - Dev-only harness `dev/audio-smoke.html` (not in the production build): offline render, live output-onset measurement, and WAV renders for review.
 
 **Not built yet (by design):** Pitch Grid editor + DRUMS/MELODY tabs + preview strip, the tower "elevator light", Remix Dice v2 / Chaos, product audio export. Clear doesn't affect the melody in V2.3a (to revisit with the editor).
+
+
+---
+
+## V3.1 — Living Music Toy (simplification)
+
+**Status:** ✅ Implemented on 2026-11-24. Awaiting your review.
+**Product direction:** *BEAT.BIT is a living music toy.* The core loop is **PLAY → REMIX → WATCH → EXPLORE**. It isn't primarily a rhythm scoring game.
+
+### What changed from V3.0
+| Area | V3.1 |
+|---|---|
+| Modes | **Sandbox is the default and only visible mode** |
+| Arcade (Wake the City, XP, stars, ranks, F/J timing, pads, results) | Hidden behind the feature flag `FEATURES.arcade` (`src/config/features.ts`), **off** by default. Developers can enable it with `VITE_FEATURE_ARCADE=true`. **The code is kept, not deleted** (`src/data/arcade.ts`, `src/hooks/useArcade.ts`, `src/components/ArcadePanel.tsx`, and their 12 tests). With the flag off, nothing can start a challenge, F/J do nothing, and no progress is written. |
+| Kits | **No locked states.** NEON DRIVE, PIXEL QUEST, NIGHT SHIFT, and BOSS RUSH are all directly selectable. Composed drums, bass, chords, and lead are unchanged. |
+| Primary control | **One primary button: PLAY/STOP.** REMIX, UNDO, CLEAR, and the kit picker are secondary (outline). |
+| Copy | Tagline: "A living music toy. Press play, remix, and watch the city move." Help text: switch kits, tap squares, or REMIX, and watch the city respond. |
+| Kept | Drum-grid editing, Remix Dice + Undo, Clear (+ blackout), kit moods, the four performers and city moments, keyboard model, focus rings, reduced motion, scene description, live announcements |
+
+### First-time experience (V3.1)
+1. **Open BEAT.BIT.** The city is asleep. NEON DRIVE is loaded, and the grid shows its composed drums. PLAY is the only primary button.
+2. **Press PLAY.** A **complete musical loop** starts at once (drums + bass + chords + lead). The city switches on.
+   - Measured: first sound 322 ms after the click, which includes starting the audio context.
+3. **Switch kits** (PIXEL QUEST, NIGHT SHIFT, BOSS RUSH) while it plays. The tempo, tune, and sky mood change from the next step.
+4. **REMIX.** A small, musical variation, with the die, a grid ring, and a window tumble. UNDO is always one tap away.
+5. **Watch the city respond.** The Stomper, resident, birds, and crowd perform each drum. Lamps follow the playhead.
+
+### Acceptance (V3.1)
+- [x] No Arcade UI is visible: no challenge card, rank, XP, stars, or pads. F/J are inert. Nothing is written to `localStorage`.
+- [x] All kits are selectable while playing (tempo, tune, mood, announcement).
+- [x] Press PLAY → full loop audible (drums + backing). Backing continues with the drums cleared.
+- [x] Remix ×3 / Undo ×3 returns exactly to the start. Clear and Undo work.
+- [x] Performers on the exact drum steps with 0-frame lag. Reduced motion keeps reactions without movement.
+- [x] Focus ring on every control. Tab order starts at PLAY. Grid keyboard unchanged.
+- [x] No horizontal overflow at 320 / 375 / 390 px.

@@ -298,3 +298,54 @@ On "continue" I proceeded with the **recommended option for each decision below*
 3. **Slice kits:** NEON DRIVE + PIXEL QUEST (recommended), or NEON DRIVE only (faster)?
 4. **V2.3a temporary melody controls:** remove in the slice (the kit lead replaces them)? Recommended: yes.
 5. **Arcade input default:** 2 pads `F` / `J`, with on-screen pads on touch (recommended)?
+
+
+---
+
+## Part 6 — Living Music Toy (2026-11-24)
+
+### V3.1 Simplification: ✅ DONE (awaiting review)
+Sandbox is the only visible mode. The Arcade is behind a disabled flag (code kept). No locked kits. One primary PLAY/STOP. The first-time loop is PLAY → switch kits → REMIX → watch. See DESIGN.md → V3.1. **Not on the roadmap:** XP, more challenges, unlocks, new game mechanics.
+
+### V3.2 Visual Polish: ⏳ PROPOSED (not started)
+**Goal:** make the world the reason people stay. One expressive character walks through a living, scrolling city that moves, dances, and rains to the music.
+
+> **Reference note.** The shared mockup's scene image carries a third-party watermark (pcgamer.com), so it's likely a screenshot of an existing game. We use it **only as mood** (neon signage, rain, foreground foliage, depth). The art, signage, palette, and composition will be **original**, with no recreation of that game or scene.
+
+**Layout (from the mockup):**
+- A larger scene at the top.
+- A title row with the **kit name + BPM + world label** (e.g. "NEON DRIVE · 112 BPM · RAINY NIGHT").
+- Three primary actions **PLAY · REMIX · WORLD**.
+- The kit picker.
+- The existing accessible drum grid (unchanged behavior).
+
+| Part | Proposal | Sync / accessibility rules |
+|---|---|---|
+| **Renderer** | Canvas 2D with layered offscreen tiles. Logical canvas grows from 160×50 to **192×108** (16:9), integer device-pixel scale (desktop 5× = 960×540, phone 3× on 2× DPR ≈ 288 CSS px wide). Same single render loop. | Frame time measured (p95 < 8 ms desktop, < 16 ms mid-range phone). No sub-pixel drawing. |
+| **Scrolling + parallax** | The world scrolls horizontally at a **tempo-locked** speed (whole pixels per step). Layers: sky (static) · far skyline 0.15× · mid towers with windows and original pixel signage 0.4× · street, lamps, and character 1× · foreground foliage/railings 1.4× (partial occlusion, as in the mood reference). Procedural, seeded chunks so the city never repeats exactly. | Scroll advances only on heard steps (no free-running timer). **Reduced motion:** no scrolling (a static panorama slice) and no parallax. |
+| **One expressive character** | An original pixel character, about 14×22 px, with headphones and a jacket in the kit's accent colour. Walks in place while the world scrolls (camera follows). About 24–30 frames total. | Every dance move fires on a **real drum hit**. Reduced motion: pose swaps only, no travel. |
+| **Groove-specific movement** | NEON DRIVE: a **funk strut** (head bob on kick, shoulder shimmy on accented hats, half spin on clap). PIXEL QUEST: a **hop-skip** (bounce on 8ths, jump on snare). NIGHT SHIFT: a **house shuffle** (steady walk, arm pump on offbeat hats, stop-and-point on the drop). BOSS RUSH: a **charge** (run cycle, power pose on crash, headbang on snare rolls). | Movement intensity follows note velocity (accents vs ghost notes) |
+| **Performers** | The four V2.1 performers become **world set-pieces** that recur as chunks scroll by (rooftop crowd, birds on wires, apartment residents). The character takes over the kick "stomp". **[Decision]** | Same timing rules as V2.1 |
+| **Rain + atmosphere** | Weather: clear / rain / fog. Rain is 1 px slanted streaks (capped at about 120). Hats brighten the rain briefly. Kicks splash puddles. A street-band **reflection** of lamps and signs (50% alpha, 1 px wobble on bass notes). | Reduced motion: rain is shown as static streaks, no wobble |
+| **Day / night** | Time of day: dawn · day · dusk · night. Palette ramps the sky, window-lit probability, and sign glow. Music energy (section loudness) brightens the city at night. | Text and UI tokens unchanged (only the scene changes). Contrast re-checked for the character on every palette. |
+| **World randomization** | **WORLD** button → a seeded world `{time of day, weather, palette, skyline seed, foliage, signage set}` with a readable label ("RAINY NIGHT"). Undoable (the same history as Remix). Seeds are deterministic and ready for future sharing. | The live region announces the new world. The scene description updates (time, weather, character). |
+
+**Milestones:**
+| # | Deliverable | Acceptance highlights |
+|---|---|---|
+| V3.2a | Renderer foundation: 192×108 layers, tempo-locked scrolling, parallax, seeded chunks, perf budget | Scroll moves exactly N px per heard step (probe). p95 frame time within budget. Reduced motion = no scroll. Current performers still sync. |
+| V3.2b | Character + four groove styles | Each move fires only on its drum (canvas probe, as in V2.1). The kit switch changes style on the next step. Readable at phone size. |
+| V3.2c | Rain, reflections, day/night palettes | Rain responds to hats, splashes to kicks. All palettes pass the character/scene contrast check. Reduced-motion variants. |
+| V3.2d | WORLD button + mockup layout (title row, PLAY / REMIX / WORLD) | Seeded and deterministic. Undo restores the world. Keyboard and focus. 320–1440 px without overflow. |
+
+**Risks:**
+- Art time for the character (time-box frames, start with 2-frame poses).
+- Visual noise competing with the grid (hierarchy review at each step).
+- Low-end phone performance (pre-rendered tiles, particle caps).
+- Originality (no reference tracing).
+
+**Decisions needed before V3.2:**
+1. Adopt the mockup layout (bigger scene; PLAY / REMIX / WORLD as three equal actions with PLAY primary)?
+2. Canvas size 192×108 (recommended) vs keeping 160-wide?
+3. Retire the four performers into world set-pieces, with the character taking the kick (recommended), or keep them as is?
+4. Character concept: the "headphones + kit-colour jacket" original (recommended), or another idea?

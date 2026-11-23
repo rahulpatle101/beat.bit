@@ -113,6 +113,13 @@
     --sign-off: #2b2540;
     --street: #2a2d36;
     --lamp-off: #3a3d46;
+    /* V2.1 performers (ART_DIRECTION.md → V2.1 Color and lighting) */
+    --actor: #3b3f4a;
+    --actor-rim: #6e727c;
+    --actor-mid: #6e727c;
+    --visor-idle: #2e2224;
+    --visor-ready: #4a2826;
+    --wire: #2e313a;
 
     --background: var(--void);
     --foreground: var(--ink);

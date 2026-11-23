@@ -1,14 +1,36 @@
-// Signal City: a 160×50 logical-pixel scene (DESIGN.md §11, ART_DIRECTION.md Animation language).
-// Each instrument owns one layer of the city. Scene state is a handful of timestamps; the
-// renderer derives every frame from (event time, now), quantized to a ~12 fps pixel cadence.
-// No React in here.
+// Signal City Live: a 160×50 logical-pixel scene.
+// V1 (DESIGN.md §11): each instrument owns one layer of the city.
+// V2.1 (ART_DIRECTION.md / DESIGN.md → V2.1): each instrument also has a performer, and the
+// city has moments (switch-on, power-down, blackout, ripple). Scene state is a handful of
+// timestamps; every frame is derived from (event time, now). No React in here.
+//
+// Timing rule: rhythmic motion comes only from heard sound events (step(), audition()).
+// Moments come from transport/UI cues and use fixed pixel-frame counts.
 
 import type { TrackId } from '@/data/patterns'
+import {
+  AMBIENT_WINDOWS,
+  ANTENNA_X,
+  APARTMENTS,
+  APARTMENT_WINDOWS,
+  BUILDINGS,
+  FRAME,
+  GROUND,
+  H,
+  IDLE_WINDOW,
+  LAMPS,
+  SIGN_PIXELS,
+  STARS,
+  TOWER_TOP,
+  W,
+  WINDOWS,
+  WIRE,
+  mulberry32,
+  wireY,
+} from './geometry'
+import { Performers } from './performers'
 
-export const W = 160
-export const H = 50
-const GROUND = 44 // street line y; buildings sit above it
-const FRAME = 1000 / 12 // scene frame length in ms (pixel-honest stepped motion)
+export { W, H } from './geometry'
 
 export interface Palette {
   void: string
@@ -25,85 +47,22 @@ export interface Palette {
   signOff: string
   street: string
   lampOff: string
+  actor: string
+  actorRim: string
+  actorMid: string
+  visorIdle: string
+  visorReady: string
+  wire: string
 }
 
-// ---------- City layout (hand-placed, deterministic) ----------
-
-/** [x, width, height] */
-const BUILDINGS: [number, number, number][] = [
-  [0, 13, 17],
-  [14, 17, 25],
-  [32, 12, 15],
-  [45, 22, 30],
-  [68, 19, 38], // tower: antenna + neon sign
-  [88, 16, 21],
-  [105, 12, 28],
-  [118, 20, 18],
-  [139, 21, 26],
-]
-const TOWER = 4
-const [TX, TW, TH] = BUILDINGS[TOWER]
-const TOWER_TOP = GROUND - TH
-const ANTENNA_X = TX + Math.floor(TW / 2)
-const SIGN_X = TX + 4
-const SIGN_Y = TOWER_TOP + 3
-
-// 3×5 pixel letters for the neon sign.
-const LETTERS: Record<string, string[]> = {
-  B: ['110', '101', '110', '101', '110'],
-  I: ['111', '010', '010', '010', '111'],
-  T: ['111', '010', '010', '010', '010'],
-}
-const SIGN_PIXELS: [number, number][] = []
-'BIT'.split('').forEach((ch, i) => {
-  LETTERS[ch].forEach((row, y) =>
-    row.split('').forEach((bit, x) => {
-      if (bit === '1') SIGN_PIXELS.push([SIGN_X + i * 4 + x, SIGN_Y + y])
-    }),
-  )
-})
-
-/** Windows: 2×2 on a 4px grid inside each building (skipping the tower's sign area). */
-const WINDOWS: [number, number][] = []
-BUILDINGS.forEach(([bx, bw, bh], i) => {
-  const top = GROUND - bh
-  const firstY = i === TOWER ? SIGN_Y + 8 : top + 3
-  for (let y = firstY; y + 2 <= GROUND - 2; y += 4) {
-    for (let x = bx + 2; x + 2 <= bx + bw - 1; x += 4) WINDOWS.push([x, y])
-  }
-})
-
-/** Seeded PRNG so the city (and its random choices) are stable between reloads. */
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-const STARS: [number, number][] = (() => {
-  const rnd = mulberry32(7)
-  const out: [number, number][] = []
-  while (out.length < 14) {
-    const x = Math.floor(rnd() * W)
-    const y = Math.floor(rnd() * 16) + 1
-    // Keep stars out of buildings.
-    const inside = BUILDINGS.some(([bx, bw, bh]) => x >= bx && x < bx + bw && y >= GROUND - bh)
-    if (!inside && Math.abs(x - ANTENNA_X) > 3) out.push([x, y])
-  }
-  return out
-})()
-
-const LAMPS = Array.from({ length: 16 }, (_, i) => 5 + i * 10)
-const IDLE_WINDOW = WINDOWS.findIndex(([x, y]) => x >= 92 && y >= GROUND - 12)
+export type SceneCue = 'start' | 'stop' | 'cleared' | 'groove' | 'non-empty'
 
 // 4×4 Bayer matrix for the sky's two-tone ordered dither.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 
-// ---------- Scene ----------
+/** Snare lights this many small windows (V2.1 C2; V1 was 3–6). */
+const SNARE_WINDOWS = 3
+const SNARE_CANDIDATES = WINDOWS.map((_, i) => i).filter((i) => !APARTMENT_WINDOWS.has(i))
 
 interface LitWindow {
   index: number
@@ -111,17 +70,20 @@ interface LitWindow {
   life: number
 }
 
+type Mode = 'idle' | 'on' | 'dark'
+type Transition = 'switchOn' | 'powerDown' | 'blackout' | 'return' | null
+
 export class CityScene {
   private ctx: CanvasRenderingContext2D
   private sky: HTMLCanvasElement
   private city: HTMLCanvasElement
   private rnd = mulberry32(42)
   private p: Palette
+  private performers: Performers
 
-  playing = false
   reducedMotion = false
 
-  // Event state (performance.now() timestamps in ms; -Infinity = never)
+  // V1 event state (frame-timebase timestamps in ms; -Infinity = never)
   private kickAt = -Infinity
   private kickLen = 160
   private hatAt = -Infinity
@@ -130,6 +92,13 @@ export class CityScene {
   private clapHold = 150
   private windows: LitWindow[] = []
   private currentStep = -1
+
+  // V2.1 moments
+  private mode: Mode = 'idle'
+  private transition: Transition = null
+  private modeAt = -Infinity
+  private rippleAt = -Infinity
+  private cues: SceneCue[] = []
 
   constructor(canvas: HTMLCanvasElement, palette: Palette) {
     canvas.width = W
@@ -141,6 +110,24 @@ export class CityScene {
     this.p = palette
     this.sky = this.buildSky()
     this.city = this.buildCity()
+    this.performers = new Performers({
+      actor: palette.actor,
+      actorRim: palette.actorRim,
+      actorMid: palette.actorMid,
+      actorHi: palette.ink,
+      visorIdle: palette.visorIdle,
+      visorReady: palette.visorReady,
+      void: palette.void,
+      kick: palette.kick,
+      snare: palette.snare,
+      hat: palette.hat,
+      clap: palette.clap,
+    })
+  }
+
+  /** True while the transport is running (on or blacked out). */
+  get playing(): boolean {
+    return this.mode !== 'idle'
   }
 
   private layer(draw: (c: CanvasRenderingContext2D) => void): HTMLCanvasElement {
@@ -180,25 +167,31 @@ export class CityScene {
       c.fillRect(ANTENNA_X, TOWER_TOP - 5, 1, 5)
       c.fillStyle = this.p.windowOff
       for (const [x, y] of WINDOWS) c.fillRect(x, y, 2, 2)
+      // V2.1: apartment windows merge 2×2 blocks of V1 windows (no facade cut).
+      for (const a of APARTMENTS) c.fillRect(a.x, a.y, 6, 6)
       c.fillStyle = this.p.signOff
       for (const [x, y] of SIGN_PIXELS) c.fillRect(x, y, 1, 1)
+      // V2.1: power line between buildings 7 and 9.
+      c.fillStyle = this.p.wire
+      for (let x = WIRE.x0; x <= WIRE.x1; x++) c.fillRect(x, wireY(x), 1, 1)
     })
   }
 
-  // ---------- Events (called at the moment a step is heard) ----------
+  // ---------- Events ----------
 
+  /** A scheduled step was heard at `now` (frame timebase). */
   step(step: number, tracks: TrackId[], stepMs: number, now: number) {
     this.currentStep = step
     for (const t of tracks) {
+      this.performers.hit(t, now, stepMs)
       switch (t) {
         case 'kick':
           this.kickAt = now
           this.kickLen = Math.min(2 * FRAME, stepMs * 0.7)
           break
         case 'snare': {
-          const n = 3 + Math.floor(this.rnd() * 4) // 3–6 windows
-          for (let i = 0; i < n; i++) {
-            const index = Math.floor(this.rnd() * WINDOWS.length)
+          for (let i = 0; i < SNARE_WINDOWS; i++) {
+            const index = SNARE_CANDIDATES[Math.floor(this.rnd() * SNARE_CANDIDATES.length)]
             this.windows = this.windows.filter((w) => w.index !== index)
             this.windows.push({ index, start: now, life: stepMs * 3 })
           }
@@ -216,15 +209,86 @@ export class CityScene {
     }
   }
 
-  stop() {
-    this.currentStep = -1
-    this.kickAt = this.hatAt = this.clapAt = -Infinity
-    this.windows = []
+  /** An audition sound was heard (step toggled on while stopped): its performer reacts once. */
+  audition(track: TrackId, stepMs: number, now: number) {
+    this.performers.hit(track, now, stepMs)
+  }
+
+  /** Transport and UI cues. Applied at the next draw, in the frame timebase. */
+  cue(c: SceneCue) {
+    this.cues.push(c)
+  }
+
+  private applyCue(c: SceneCue, now: number) {
+    switch (c) {
+      case 'start':
+        this.mode = 'on'
+        this.transition = 'switchOn'
+        this.modeAt = now
+        break
+      case 'stop':
+        this.mode = 'idle'
+        this.transition = 'powerDown'
+        this.modeAt = now
+        this.currentStep = -1
+        this.kickAt = this.hatAt = this.clapAt = -Infinity
+        this.windows = []
+        this.performers.reset()
+        break
+      case 'cleared':
+        if (this.mode !== 'on') break
+        this.mode = 'dark'
+        this.transition = 'blackout'
+        this.modeAt = now
+        this.clapAt = -Infinity // the sign goes dark
+        break
+      case 'non-empty':
+        if (this.mode !== 'dark') break
+        this.mode = 'on'
+        this.transition = 'return'
+        this.modeAt = now
+        break
+      case 'groove':
+        if (this.mode === 'dark') this.applyCue('non-empty', now)
+        else if (this.mode === 'on') this.rippleAt = now
+        break
+    }
+  }
+
+  // ---------- Moments ----------
+
+  /** Light multiplier for a window at x (switch-on / blackout / return sweeps). */
+  private lightAt = (x: number, now: number): number => {
+    const age = now - this.modeAt
+    const rm = this.reducedMotion
+    const col4 = Math.floor(x / 40) // 0..3 → 4-frame left→right sweep
+    if (this.mode === 'dark') {
+      if (rm || this.transition !== 'blackout') return 0
+      return age < col4 * FRAME ? 1 : 0
+    }
+    if (this.mode === 'on' && !rm) {
+      if (this.transition === 'switchOn') return age >= col4 * FRAME ? 1 : 0
+      if (this.transition === 'return') return age >= (x < W / 2 ? 0 : 1) * FRAME ? 1 : 0
+    }
+    return 1
+  }
+
+  /** Switch-on and power-down sequencing for performers. */
+  private awake = (part: 'stomper' | 'crowd' | 'bird', index: number, now: number): boolean => {
+    const age = now - this.modeAt
+    const rm = this.reducedMotion
+    if (this.mode === 'idle') return this.transition === 'powerDown' && !rm && age < FRAME
+    if (this.transition !== 'switchOn' || rm) return true
+    if (part === 'stomper') return age >= FRAME
+    if (part === 'bird') return age >= index * FRAME
+    return age >= 2 * FRAME // crowd stands on frame 2
   }
 
   // ---------- Render ----------
 
   draw(now: number) {
+    for (const c of this.cues.splice(0)) this.applyCue(c, now)
+
     const c = this.ctx
     const p = this.p
     const rm = this.reducedMotion
@@ -251,14 +315,30 @@ export class CityScene {
     const dy = !rm && kickAge < this.kickLen ? 1 : 0
     c.drawImage(this.city, 0, dy)
 
-    // Snare: lit windows fade out in 3 stepped levels.
+    // V2.1 ambient windows: the city is "on" while playing (30% amber), with sweeps and ripple.
+    if (this.mode !== 'idle') {
+      const rippleAge = now - this.rippleAt
+      c.fillStyle = p.snare
+      for (const i of AMBIENT_WINDOWS) {
+        const [x, y] = WINDOWS[i]
+        const light = this.lightAt(x, now)
+        if (!light) continue
+        const rc = Math.floor(x / 54) // 3-frame ripple
+        const rippling = !rm && rippleAge >= rc * FRAME && rippleAge < (rc + 1) * FRAME
+        c.globalAlpha = rippling ? 0.75 : 0.3
+        c.fillRect(x, y + dy, 2, 2)
+      }
+      c.globalAlpha = 1
+    }
+
+    // Snare: lit windows fade out in 3 stepped levels (gated by blackout).
     this.windows = this.windows.filter((w) => now - w.start < w.life)
     c.fillStyle = p.snare
     for (const w of this.windows) {
-      const level = Math.floor(((now - w.start) / w.life) * 3) // 0,1,2
-      c.globalAlpha = [1, 0.6, 0.3][level] ?? 0
       const [x, y] = WINDOWS[w.index]
-      c.fillRect(x, y + dy, 2, 2)
+      const level = Math.floor(((now - w.start) / w.life) * 3) // 0,1,2
+      c.globalAlpha = ([1, 0.6, 0.3][level] ?? 0) * this.lightAt(x, now)
+      if (c.globalAlpha > 0) c.fillRect(x, y + dy, 2, 2)
     }
     c.globalAlpha = 1
 
@@ -285,6 +365,14 @@ export class CityScene {
       c.globalAlpha = 1
     }
 
+    // V2.1 performers.
+    this.performers.draw(c, now, {
+      dy,
+      reducedMotion: rm,
+      awake: (part, i) => this.awake(part, i, now),
+      lightAt: (x) => (this.mode === 'idle' ? 1 : this.lightAt(x, now)),
+    })
+
     // Kick: the street line flashes coral.
     const streetFlash = kickAge < FRAME ? 1 : kickAge < 2 * FRAME ? 0.5 : 0
     c.fillStyle = p.street
@@ -310,7 +398,7 @@ export class CityScene {
     })
 
     // Idle: one window cursor blinks at 1 Hz (steady with reduced motion).
-    if (!this.playing && IDLE_WINDOW >= 0) {
+    if (this.mode === 'idle' && IDLE_WINDOW >= 0) {
       const on = rm || Math.floor(now / 500) % 2 === 0
       if (on) {
         const [x, y] = WINDOWS[IDLE_WINDOW]
@@ -340,5 +428,11 @@ export function readPalette(el: Element = document.documentElement): Palette {
     signOff: v('--sign-off', '#2b2540'),
     street: v('--street', '#2a2d36'),
     lampOff: v('--lamp-off', '#3a3d46'),
+    actor: v('--actor', '#3b3f4a'),
+    actorRim: v('--actor-rim', '#6e727c'),
+    actorMid: v('--actor-mid', '#6e727c'),
+    visorIdle: v('--visor-idle', '#2e2224'),
+    visorReady: v('--visor-ready', '#4a2826'),
+    wire: v('--wire', '#2e313a'),
   }
 }

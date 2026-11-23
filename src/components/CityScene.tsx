@@ -50,10 +50,8 @@ export function CityScene({ playing, onStep, onTransport, onFrame }: Props) {
     const offStep = onStep((ev, frameTime) => {
       scene.step(ev.step, ev.tracks, ev.duration * 1000, frameTime)
     })
-    const offTransport = onTransport((on) => {
-      scene.playing = on
-      if (!on) scene.stop()
-    })
+    // Transport → scene moments (switch-on / power-down), applied in the frame timebase.
+    const offTransport = onTransport((on) => scene.cue(on ? 'start' : 'stop'))
 
     // Draw from the sequencer's single render loop (no second rAF).
     const offFrame = onFrame((now) => scene.draw(now))

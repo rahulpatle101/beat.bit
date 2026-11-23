@@ -1,6 +1,6 @@
 // Music-theory lint for the composed kits (catches composition typos objectively).
 import { describe, expect, it } from 'vitest'
-import { KITS, type Note } from './kits'
+import { KITS, arrangement, barPattern, kitById, kitGrid, section, type Note } from './kits'
 
 const SCALES: Record<string, number[]> = {
   // E Dorian + borrowed C (bVI) used in the variation.
@@ -58,3 +58,22 @@ describe('composed kits: music-theory lint', () => {
     })
   }
 })
+
+describe('kit helpers (V3.0 slice)', () => {
+  it('kitGrid = the main section first bar of the four grid drums, with composed accents', () => {
+    const k = kitById('neon-drive')
+    const { pattern, accents } = kitGrid(k)
+    expect(pattern.kick.map(Number).join('')).toBe('1000000100100000') // 'x......o..x.....'
+    expect(accents.kick[7]).toBe(0.65)
+    expect(accents.snare[7]).toBe(0.35) // ghost note
+    expect(pattern.clap[12]).toBe(true)
+  })
+  it('arrangement is intro → end (15 bars); barPattern mutes chosen tracks', () => {
+    const k = kitById('pixel-quest')
+    expect(arrangement(k)).toHaveLength(15)
+    const p = barPattern(section(k, 'main')[0], new Set(['kick']))
+    expect(p.kick.some(Boolean)).toBe(false)
+    expect(p.snare[4]).toBe(true)
+  })
+})
+

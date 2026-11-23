@@ -5,6 +5,7 @@
 //   chords: "step N1.N2.N3 len [vel]"
 
 import type { BassPreset, ChordPreset, LeadPreset } from '@/audio/instruments'
+import { STEPS, TRACK_IDS, type MoodId, type Pattern, type TrackId } from './patterns'
 
 export type DrumKey = 'kick' | 'snare' | 'hat' | 'clap' | 'ohat' | 'crash' | 'shaker'
 export interface Note {
@@ -34,9 +35,13 @@ export interface Section {
   name: 'intro' | 'main' | 'variation' | 'drop' | 'end'
   bars: Bar[]
 }
+export type KitId = 'neon-drive' | 'pixel-quest' | 'night-shift' | 'boss-rush'
+
 export interface Kit {
-  id: string
+  id: KitId
   name: string
+  /** City sky mood while this kit is loaded. */
+  mood: MoodId
   bpm: number
   key: string
   harmony: string
@@ -103,6 +108,7 @@ const ndDrop = (k: 0 | 1) => ({
 export const NEON_DRIVE: Kit = {
   id: 'neon-drive',
   name: 'NEON DRIVE',
+  mood: 'warm',
   bpm: 112,
   key: 'E Dorian',
   harmony: 'i9 – IV13 vamp (Em9 | A13); variation bVI – bVII – i – IV (Cmaj7 | D6/9 | Em9 | A13)',
@@ -170,6 +176,7 @@ const pqDrop = { kick: 'x...x...x.x.x...', snare: '....x.......x...', hat: 'xoxo
 export const PIXEL_QUEST: Kit = {
   id: 'pixel-quest',
   name: 'PIXEL QUEST',
+  mood: 'night',
   bpm: 132,
   key: 'C major',
   harmony: 'I – vi – IV – V (C | Am | F | G); variation vi – IV – ii7 – V7',
@@ -238,6 +245,7 @@ const nsHookB = line('0 F4 3, 4 G4 1 .8, 6 Ab4 2, 10 Bb4 1, 11 Ab4 1 .8, 12 G4 2
 export const NIGHT_SHIFT: Kit = {
   id: 'night-shift',
   name: 'NIGHT SHIFT',
+  mood: 'teal',
   bpm: 124,
   key: 'F minor',
   harmony: 'i7 vamp (Fm7); drop i7 – i7 – VImaj7 – VII6 (Fm7 | Fm7 | Dbmaj7 | Eb6)',
@@ -311,6 +319,7 @@ const tomFill = line('12 D3 1, 13 B2 1 .9, 14 A2 1 .9, 15 F2 1')
 export const BOSS_RUSH: Kit = {
   id: 'boss-rush',
   name: 'BOSS RUSH',
+  mood: 'red',
   bpm: 150,
   key: 'D harmonic minor',
   harmony: 'i – VI – iv – V7 (Dm | Bb | Gm | A7); dominant build iv – iv – V7 – V7; resolves to i',
@@ -358,3 +367,53 @@ export const BOSS_RUSH: Kit = {
 }
 
 export const KITS: Kit[] = [NEON_DRIVE, PIXEL_QUEST, NIGHT_SHIFT, BOSS_RUSH]
+
+// ---------- Kit helpers for the app (V3.0 slice) ----------
+
+/** Kits playable in Sandbox from the start; the others are locked until unlocked (GAME_DESIGN §5). */
+export const STARTER_KITS: readonly KitId[] = ['neon-drive', 'pixel-quest']
+
+export function kitById(id: KitId): Kit {
+  return KITS.find((k) => k.id === id) ?? NEON_DRIVE
+}
+
+export function section(kit: Kit, name: Section['name']): Bar[] {
+  return kit.sections.find((s) => s.name === name)?.bars ?? []
+}
+
+/** All bars of the full arrangement, intro → end. */
+export function arrangement(kit: Kit): Bar[] {
+  return kit.sections.flatMap((s) => s.bars)
+}
+
+const DRUM_VEL: Record<string, number> = { x: 1, o: 0.65, '-': 0.35 }
+
+/**
+ * The editable grid for a kit: the main section's first bar of kick/snare/hat/clap, with its
+ * composed velocities (accents and ghost notes) kept as per-step accents.
+ */
+export function kitGrid(kit: Kit): { pattern: Pattern; accents: Record<TrackId, number[]> } {
+  const bar0 = section(kit, 'main')[0]
+  const pattern = {} as Pattern
+  const accents = {} as Record<TrackId, number[]>
+  for (const t of TRACK_IDS) {
+    const str = bar0?.drums[t] ?? ''
+    accents[t] = Array.from({ length: STEPS }, (_, i) => DRUM_VEL[str[i]] ?? 0)
+    pattern[t] = accents[t].map((v) => v > 0)
+  }
+  return { pattern, accents }
+}
+
+/** Grid drums of an arrangement bar as a Pattern (for scheduling and performer reactions). */
+export function barPattern(bar: Bar, muted: ReadonlySet<TrackId> = new Set()): Pattern {
+  const p = {} as Pattern
+  for (const t of TRACK_IDS) {
+    const str = muted.has(t) ? '' : bar.drums[t] ?? ''
+    p[t] = Array.from({ length: STEPS }, (_, i) => (DRUM_VEL[str[i]] ?? 0) > 0)
+  }
+  return p
+}
+
+export function barVel(bar: Bar, track: TrackId, step: number): number {
+  return DRUM_VEL[bar.drums[track]?.[step] ?? '.'] ?? 0
+}

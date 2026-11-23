@@ -112,6 +112,22 @@ export class AudioEngine {
     return (ctx.outputLatency || 0) + (ctx.baseLatency || 0)
   }
 
+  /**
+   * Audio-clock time of what the listener was hearing at `eventTimeStamp` (performance.now()
+   * timebase, e.g. KeyboardEvent.timeStamp). Uses getOutputTimestamp() (context time of the
+   * sample at the output) when available; otherwise estimates from currentTime − output latency.
+   * Arcade judging compares this with each cue's scheduled time (GAME_DESIGN §3.1).
+   */
+  heardTimeAt(eventTimeStamp: number): number {
+    const ctx = this.ctx
+    if (!ctx) return 0
+    const ts = typeof ctx.getOutputTimestamp === 'function' ? ctx.getOutputTimestamp() : null
+    if (ts && ts.contextTime !== undefined && ts.performanceTime !== undefined && ts.performanceTime > 0) {
+      return ts.contextTime + (eventTimeStamp - ts.performanceTime) / 1000
+    }
+    return ctx.currentTime - (performance.now() - eventTimeStamp) / 1000 - this.outputLatency()
+  }
+
   /** Drum hit with velocity (1 = the V1 level), on the drums bus. */
   trigger(track: TrackId, time: number, vel = 1) {
     if (!this.ctx || !this.mix || !this.noise || this.ctx.state !== 'running') return

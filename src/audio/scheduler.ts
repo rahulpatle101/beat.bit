@@ -14,6 +14,8 @@ export interface MelodySource {
 
 export interface StepEvent {
   step: number
+  /** Bar index since Play (0-based). */
+  bar: number
   /** Clock time (seconds) the step sounds at. */
   time: number
   /** Duration of one step at the tempo it was scheduled with. */
@@ -25,13 +27,17 @@ export interface StepEvent {
 
 export interface SchedulerDeps {
   now: () => number
-  trigger: (track: TrackId, time: number) => void
-  getPattern: () => Pattern
+  trigger: (track: TrackId, time: number, step: number, bar: number) => void
+  getPattern: (bar: number) => Pattern
   getBpm: () => number
   /** V2.3 melody: read at schedule time, like the pattern. */
   getMelody?: () => MelodySource
   /** V2.3 melody: play a lead note at the step's exact time. */
   triggerNote?: (midi: number, time: number, stepSec: number) => void
+  /** V3.0: called once per scheduled step (kit layers, arcade cues), at the step's exact time. */
+  onStepScheduled?: (bar: number, step: number, time: number, stepSec: number) => void
+  /** V3.0: stop scheduling after this many bars (arrangement playback). null/undefined = loop forever. */
+  getBarCount?: () => number | null
   /** Seconds to schedule ahead. */
   lookahead?: number
   /** Timer interval in ms. */
@@ -47,6 +53,7 @@ export class Scheduler {
   private timer: ReturnType<typeof setInterval> | null = null
   private nextTime = 0
   private nextStep = 0
+  private nextBar = 0
   private queue: StepEvent[] = []
   private readonly lookahead: number
   private readonly interval: number
@@ -68,6 +75,7 @@ export class Scheduler {
   start(): boolean {
     if (this.timer !== null) return false
     this.nextStep = 0
+    this.nextBar = 0
     this.nextTime = this.deps.now() + this.startDelay
     this.queue = []
     this.tick()
@@ -93,7 +101,9 @@ export class Scheduler {
     while (this.nextTime < now) this.advance()
 
     const horizon = now + this.lookahead
+    const limit = this.deps.getBarCount?.() ?? null
     while (this.nextTime < horizon) {
+      if (limit !== null && this.nextBar >= limit) break // arrangement finished: schedule nothing more
       this.scheduleStep(this.nextStep, this.nextTime)
       this.advance()
     }
@@ -103,19 +113,22 @@ export class Scheduler {
     // Tempo is read per step, so BPM changes apply from the next step without a restart.
     this.nextTime += stepDuration(this.deps.getBpm())
     this.nextStep = (this.nextStep + 1) % STEPS
+    if (this.nextStep === 0) this.nextBar++
   }
 
   private scheduleStep(step: number, time: number) {
     // The pattern is read at schedule time, so edits land on the next pass.
-    const pattern = this.deps.getPattern()
+    const bar = this.nextBar
+    const pattern = this.deps.getPattern(bar)
     const tracks = TRACK_IDS.filter((id) => pattern[id][step])
-    for (const t of tracks) this.deps.trigger(t, time)
+    for (const t of tracks) this.deps.trigger(t, time, step, bar)
     const duration = stepDuration(this.deps.getBpm())
+    this.deps.onStepScheduled?.(bar, step, time, duration)
     // Melody notes share the drums' exact step time (same clock, same lookahead).
     const melody = this.deps.getMelody?.()
     const note = melody?.on ? melody.notes[step] ?? undefined : undefined
     if (note !== undefined && note !== null) this.deps.triggerNote?.(note, time, duration)
-    this.queue.push({ step, time, duration, tracks, ...(note != null ? { note } : {}) })
+    this.queue.push({ step, bar, time, duration, tracks, ...(note != null ? { note } : {}) })
   }
 
   /** Remove and return every queued step whose time has arrived. */

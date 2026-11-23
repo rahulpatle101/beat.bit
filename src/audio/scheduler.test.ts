@@ -181,4 +181,30 @@ describe('Scheduler', () => {
     expect(drums.length).toBeGreaterThan(drumsBefore)
     s.stop()
   })
+
+  it('V3.0: counts bars, calls onStepScheduled per step, and stops scheduling at the bar limit', () => {
+    let clock = 0
+    const seen: { bar: number; step: number; time: number }[] = []
+    const s = new Scheduler({
+      now: () => clock,
+      trigger: () => {},
+      getPattern: () => emptyPattern(),
+      getBpm: () => 120,
+      onStepScheduled: (bar, step, time) => seen.push({ bar, step, time }),
+      getBarCount: () => 2,
+      startDelay: 0,
+    })
+    s.start()
+    for (let i = 0; i < 240; i++) {
+      clock += 0.025
+      vi.advanceTimersByTime(25)
+    }
+    expect(seen).toHaveLength(32) // exactly 2 bars, then nothing more
+    expect(seen[16]).toEqual({ bar: 1, step: 0, time: 2 })
+    expect(s.running).toBe(true) // the transport stays up; the app stops it after the tail
+    const evs = s.drain(clock)
+    expect(evs.at(-1)).toMatchObject({ bar: 1, step: 15 })
+    s.stop()
+  })
 })
+

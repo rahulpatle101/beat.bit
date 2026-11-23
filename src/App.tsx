@@ -7,7 +7,7 @@ import { SequencerGrid } from '@/components/SequencerGrid'
 import { TransportControls } from '@/components/TransportControls'
 import { useEffect, useState } from 'react'
 import type { AudioStatus } from '@/audio/engine'
-import { grooveById } from '@/data/patterns'
+import { STARTER_KITS, kitById } from '@/data/kits'
 import { useSequencer } from '@/hooks/useSequencer'
 
 const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'default' | 'destructive' }> = {
@@ -33,7 +33,7 @@ export default function App() {
             <h1 className="retro text-lg text-ink sm:text-xl">BEAT.BIT</h1>
             <span className="retro hidden text-[10px] text-ink-dim sm:inline">DAY 001 / 100</span>
           </div>
-          <p className="text-sm text-ink-dim">A tiny pixel world that performs the beat you make.</p>
+          <p className="text-sm text-ink-dim">Make funky tunes. Wake the city.</p>
         </div>
         <Badge variant={status.variant} className="text-[10px]">
           {status.label}
@@ -53,7 +53,7 @@ export default function App() {
             </p>
             <CityScene
               playing={seq.playing}
-              mood={grooveById(seq.grooveId).mood}
+              mood={kitById(seq.kitId).mood}
               onRemix={seq.onRemix}
               onStep={seq.onStep}
               onTransport={seq.onTransport}
@@ -79,7 +79,8 @@ export default function App() {
             <TransportControls
               playing={seq.playing}
               bpm={seq.bpm}
-              grooveId={seq.grooveId}
+              kitId={seq.kitId}
+              unlocked={STARTER_KITS}
               edited={seq.edited}
               canUndo={seq.canUndo}
               rollKey={roll.key}
@@ -87,14 +88,10 @@ export default function App() {
               onPlay={seq.play}
               onStop={seq.stop}
               onBpm={seq.setBpm}
-              onGroove={seq.loadGroove}
+              onKit={seq.loadKit}
               onRemix={seq.remix}
               onUndo={seq.undo}
               onClear={seq.clear}
-              melodyOn={seq.melodyOn}
-              melodySeed={seq.melodySeed}
-              onToggleMelody={seq.toggleMelody}
-              onNewMelody={seq.newMelody}
             />
           </CardContent>
         </Card>

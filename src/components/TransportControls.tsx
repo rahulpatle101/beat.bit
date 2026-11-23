@@ -5,13 +5,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/8bit/button'
 import { Slider } from '@/components/ui/8bit/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/8bit/toggle-group'
-import { BPM_MAX, BPM_MIN, GROOVES, type GrooveId } from '@/data/patterns'
+import { KITS, type KitId } from '@/data/kits'
+import { BPM_MAX, BPM_MIN } from '@/data/patterns'
 import { cn } from '@/lib/utils'
 
 interface Props {
   playing: boolean
   bpm: number
-  grooveId: GrooveId
+  kitId: KitId
+  /** Kits the player can load (others show as locked). */
+  unlocked: readonly KitId[]
   edited: boolean
   canUndo: boolean
   /** Increments on every remix; `rollSize` is how many cells that roll changed. */
@@ -20,15 +23,10 @@ interface Props {
   onPlay: () => void
   onStop: () => void
   onBpm: (bpm: number) => void
-  onGroove: (id: GrooveId) => void
+  onKit: (id: KitId) => void
   onRemix: () => void
   onUndo: () => void
   onClear: () => void
-  /** V2.3a review controls (temporary until the melody editor). */
-  melodyOn: boolean
-  melodySeed: number
-  onToggleMelody: () => void
-  onNewMelody: () => void
 }
 
 function PixelIcon({ kind }: { kind: 'play' | 'stop' }) {
@@ -58,12 +56,13 @@ const PIPS: Record<number, [number, number][]> = {
   6: [[2, 2], [6, 2], [2, 4], [6, 4], [2, 6], [6, 6]],
 }
 
-function NoteIcon() {
+function LockIcon() {
   return (
-    <svg viewBox="0 0 7 7" aria-hidden="true" shapeRendering="crispEdges" className="size-3.5">
-      <rect x="4" y="0" width="1" height="5" fill="currentColor" />
-      <rect x="5" y="0" width="2" height="1" fill="currentColor" />
-      <rect x="1" y="4" width="4" height="3" fill="currentColor" />
+    <svg viewBox="0 0 7 7" aria-hidden="true" shapeRendering="crispEdges" className="size-3">
+      <rect x="2" y="0" width="3" height="1" fill="currentColor" />
+      <rect x="1" y="1" width="1" height="2" fill="currentColor" />
+      <rect x="5" y="1" width="1" height="2" fill="currentColor" />
+      <rect x="0" y="3" width="7" height="4" fill="currentColor" />
     </svg>
   )
 }
@@ -108,7 +107,8 @@ function useRollingFace(rollKey: number, rollSize: number) {
 export function TransportControls({
   playing,
   bpm,
-  grooveId,
+  kitId,
+  unlocked,
   edited,
   canUndo,
   rollKey,
@@ -116,14 +116,10 @@ export function TransportControls({
   onPlay,
   onStop,
   onBpm,
-  onGroove,
+  onKit,
   onRemix,
   onUndo,
   onClear,
-  melodyOn,
-  melodySeed,
-  onToggleMelody,
-  onNewMelody,
 }: Props) {
   const face = useRollingFace(rollKey, rollSize)
 
@@ -168,7 +164,7 @@ export function TransportControls({
         <div className="flex flex-col gap-4">
           <div className="flex items-baseline gap-3">
             <span id="groove-label" className="retro text-[10px] text-ink-dim">
-              GROOVE
+              KIT
             </span>
             {edited && (
               <span className="retro text-[10px] text-snare" aria-hidden="true">
@@ -180,22 +176,27 @@ export function TransportControls({
             type="single"
             variant="outline"
             aria-labelledby="groove-label"
-            value={grooveId}
-            // Pressing the active groove again (Radix sends '') reloads it.
-            onValueChange={(v) => onGroove((v || grooveId) as GrooveId)}
+            value={kitId}
+            // Pressing the active kit again (Radix sends '') reloads it.
+            onValueChange={(v) => onKit((v || kitId) as KitId)}
             className="flex-wrap gap-x-5 gap-y-5 px-1.5"
           >
-            {GROOVES.map((g) => (
-              <ToggleGroupItem
-                key={g.id}
-                value={g.id}
-                variant="outline"
-                aria-label={`${g.name}, ${g.bpm} BPM`}
-                className="h-10 px-3 text-[10px]"
-              >
-                {g.name}
-              </ToggleGroupItem>
-            ))}
+            {KITS.map((k) => {
+              const locked = !unlocked.includes(k.id)
+              return (
+                <ToggleGroupItem
+                  key={k.id}
+                  value={k.id}
+                  variant="outline"
+                  disabled={locked}
+                  aria-label={locked ? `${k.name}, locked` : `${k.name}, ${k.bpm} BPM`}
+                  className="h-10 px-3 text-[10px] disabled:opacity-45"
+                >
+                  {locked && <LockIcon />}
+                  {k.name}
+                </ToggleGroupItem>
+              )
+            })}
           </ToggleGroup>
         </div>
 
@@ -216,29 +217,6 @@ export function TransportControls({
         </div>
       </div>
 
-      {/* V2.3a: melody review controls (the Pitch Grid editor comes in V2.3b). */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-5">
-        <span id="melody-label" className="retro text-[10px] text-ink-dim">
-          MELODY
-        </span>
-        <Button
-          variant={melodyOn ? 'default' : 'outline'}
-          className={cn('h-10', melodyOn && 'bg-lead text-void dark:bg-lead')}
-          aria-pressed={melodyOn}
-          aria-labelledby="melody-label"
-          onClick={onToggleMelody}
-        >
-          <NoteIcon />
-          {melodyOn ? 'ON' : 'OFF'}
-        </Button>
-        <Button variant="outline" className="h-10" onClick={onNewMelody} aria-describedby="melody-seed">
-          <Die face={((melodySeed % 6) + 1) as number} />
-          NEW MELODY
-        </Button>
-        <span id="melody-seed" className="retro text-[10px] text-ink-dim">
-          #{String(melodySeed).padStart(4, '0')}
-        </span>
-      </div>
     </div>
   )
 }

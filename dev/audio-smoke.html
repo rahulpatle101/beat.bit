@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BEAT.BIT — audio smoke test (dev only)</title>
+  </head>
+  <body>
+    <p>Dev-only audio verification harness. Run from DevTools: <code>await smoke.offlineRender()</code>, <code>await smoke.liveMelody()</code>.</p>
+    <script type="module">
+      import { liveMelody, offlineRender, renderGrooveWav } from '/src/dev/audioSmoke.ts'
+      window.smoke = { offlineRender, liveMelody, renderGrooveWav }
+      document.title = 'ready'
+    </script>
+  </body>
+</html>

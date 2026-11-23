@@ -277,3 +277,13 @@ Each curated groove tints the **sky only**: the two-tone dither pair behind the 
 | BOSS FIGHT | red | `#190c13 / #290f19` |
 
 The BIT sign stays "BIT" (a "BOSS" sign would change the approved tower geometry). Remix adds a 3-frame "dice tumble" in the windows: amber, restrained, and off with reduced motion.
+
+
+---
+
+## V2.3 Addendum — Melody color and the tower "elevator light"
+
+**Status:** ✅ Approved on 2026-11-23 (V2_3_MELODY_PROPOSAL.md §5). Token added in V2.3a; the city visual is planned for V2.3b.
+
+- New track color **`--lead: #6fcf97`** (muted mint), for melody only: 8.06:1 on an empty cell, dark glyph on mint 10.15:1 [computed]. Used now for the MELODY toggle's on state.
+- **Elevator light (V2.3b):** the tower's 6 window rows below the BIT sign map to the 6 scale degrees. Each note lights the two centre windows of its row in `--lead` for the note's length, with a 2-frame fade (instant with reduced motion). No new performer, sky change, or glow. The four performers stay the stars.

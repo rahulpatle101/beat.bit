@@ -115,6 +115,39 @@
 | D5 | Low | Mobile grid cells ~34 px at 375 px (V2.4) |
 | — | [—] | Not verified: real devices, VoiceOver, human listening |
 
+
+### V2.3a — BIT LEAD synth + melody generator (2026-11-23)
+
+**Spec:** V2_3_MELODY_PROPOSAL.md (approved) · DESIGN.md → V2.3a · ART_DIRECTION.md → V2.3 addendum. **Scope:** synth, generator, scheduling, and temporary review controls only.
+
+**Verification**
+
+| Check | Method | Result |
+|---|---|---|
+| Generator rules | [T] 4 grooves × 500 seeds | ✅ In scale, density band, intervals ≤ 3 degrees (octave allowed), ≤ 2 consecutive leaps, resolves to the root, A/A′/A″ share a rhythm, deterministic, ≥ 25 distinct melodies per 50 seeds, leaves room on kick+snare steps. One bug found during the build: the root resolution could create a third leap. Fixed with validated seeded retries. |
+| Synth | [T] | ✅ 25% pulse Fourier coefficients (4th harmonic = 0), envelope ordered and within step + 40 ms release at 60/104/150/180 BPM, A4 = 440 Hz |
+| Melody timing | [T] Scheduler | ✅ Notes carry exactly the drums' step timestamps (0 / 0.5 / 1.625 s at 120 BPM), off → no notes while drums continue |
+| **Real audio onsets** | [B] Dev harness: AnalyserNode on the real engine's master chain | ✅ 15/15 scheduled lead notes detected as sound. Onset lag 5.1–13 ms (mean 9.9), which is the measurement resolution (5.8 ms analyser window + 2–4 ms polling). |
+| Stop / rapid Play-Stop | [B] Same harness | ✅ Output RMS = 0 at 120 ms and 520 ms after Stop, and 0 after 21 rapid toggles: no hanging notes |
+| **Offline render (export readiness)** | [B] `OfflineAudioContext` + `createMasterChain` + real voices | ✅ All 4 grooves: drums + lead peak 0.66–0.71 (no clipping), lead alone peak 0.26–0.31, 35–51 ms per bar to render. The engine's voices and chain can be reused for export. |
+| App wiring | [B] Output tap injected into the production build | ✅ Melody off by default (#0421). Drums cleared + melody off → RMS 0. On → 0.133. Off again → 0. NEW MELODY #0421→#1168, Undo → #0421. BOOM BAP → curated #0090 with the melody still on. Stop → 0. |
+| V2.1/V2.2 regression | [B] Performer probe + regression suite | ✅ Unchanged (same steps, 0-frame lag, 144.43 / 83.26 ms, no stuck poses). First Play is identical with the melody off. |
+| Keyboard / focus / mobile | [B] Real Tab + Enter; 375 px @ 2× | ✅ CLEAR → MELODY (`aria-pressed`) → NEW MELODY → grid, all with focus rings. Enter toggles and announces. No overflow. |
+| Unit tests | [T] | ✅ 37/37 |
+| Listening artifacts | [B] Offline render → 16-bit WAV | ✅ 4-bar WAV per groove with its curated melody (the recording can't capture audio) |
+
+**Bundle:** JS 344.8 KB (111.2 KB gzip), +6.4 KB vs V2.2. The dev harness isn't in the production build (`dist/` holds only `index.html` + assets).
+
+**Remaining issues after V2.3a**
+
+| # | Severity | Issue |
+|---|---|---|
+| M1 | **Needs you** | The melodies and the lead's tone haven't been heard by a human. Curated seeds (421/90/128/150) were chosen by rule, not by ear. |
+| M2 | Info | Temporary review controls (MELODY / NEW MELODY) will be replaced by the Pitch Grid editor in V2.3b |
+| M3 | Info | Clear doesn't clear the melody yet (decide with the editor) |
+| M4 | Info | The melody has no city visual yet (tower light planned for V2.3b) |
+| M5 | Info | The lead releases 40 ms past the next step's onset (by design, a short overlap). It's monophonic in practice. |
+
 ## How findings were verified
 
 | Tag | Meaning |

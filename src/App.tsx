@@ -91,6 +91,10 @@ export default function App() {
               onRemix={seq.remix}
               onUndo={seq.undo}
               onClear={seq.clear}
+              melodyOn={seq.melodyOn}
+              melodySeed={seq.melodySeed}
+              onToggleMelody={seq.toggleMelody}
+              onNewMelody={seq.newMelody}
             />
           </CardContent>
         </Card>

@@ -24,6 +24,11 @@ interface Props {
   onRemix: () => void
   onUndo: () => void
   onClear: () => void
+  /** V2.3a review controls (temporary until the melody editor). */
+  melodyOn: boolean
+  melodySeed: number
+  onToggleMelody: () => void
+  onNewMelody: () => void
 }
 
 function PixelIcon({ kind }: { kind: 'play' | 'stop' }) {
@@ -51,6 +56,16 @@ const PIPS: Record<number, [number, number][]> = {
   4: [[2, 2], [6, 2], [2, 6], [6, 6]],
   5: [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]],
   6: [[2, 2], [6, 2], [2, 4], [6, 4], [2, 6], [6, 6]],
+}
+
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 7 7" aria-hidden="true" shapeRendering="crispEdges" className="size-3.5">
+      <rect x="4" y="0" width="1" height="5" fill="currentColor" />
+      <rect x="5" y="0" width="2" height="1" fill="currentColor" />
+      <rect x="1" y="4" width="4" height="3" fill="currentColor" />
+    </svg>
+  )
 }
 
 function Die({ face }: { face: number }) {
@@ -105,6 +120,10 @@ export function TransportControls({
   onRemix,
   onUndo,
   onClear,
+  melodyOn,
+  melodySeed,
+  onToggleMelody,
+  onNewMelody,
 }: Props) {
   const face = useRollingFace(rollKey, rollSize)
 
@@ -195,6 +214,30 @@ export function TransportControls({
             CLEAR
           </Button>
         </div>
+      </div>
+
+      {/* V2.3a: melody review controls (the Pitch Grid editor comes in V2.3b). */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-5">
+        <span id="melody-label" className="retro text-[10px] text-ink-dim">
+          MELODY
+        </span>
+        <Button
+          variant={melodyOn ? 'default' : 'outline'}
+          className={cn('h-10', melodyOn && 'bg-lead text-void dark:bg-lead')}
+          aria-pressed={melodyOn}
+          aria-labelledby="melody-label"
+          onClick={onToggleMelody}
+        >
+          <NoteIcon />
+          {melodyOn ? 'ON' : 'OFF'}
+        </Button>
+        <Button variant="outline" className="h-10" onClick={onNewMelody} aria-describedby="melody-seed">
+          <Die face={((melodySeed % 6) + 1) as number} />
+          NEW MELODY
+        </Button>
+        <span id="melody-seed" className="retro text-[10px] text-ink-dim">
+          #{String(melodySeed).padStart(4, '0')}
+        </span>
       </div>
     </div>
   )

@@ -538,3 +538,21 @@ Tab order: PLAY → Tempo → **Groove picker** (one stop; ←/→ move, Enter/S
 - [x] Keyboard-operable picker, Remix, and Undo with visible focus.
 - [x] No horizontal overflow at 375 px @ 2×. Picker buttons are 40 px tall.
 - [x] V2.1 performers and audio sync unchanged (probe + regression suite).
+
+
+---
+
+## V2.3a — BIT LEAD synth + melody generator
+
+**Status:** ✅ Implemented on 2026-11-23. Awaiting your review (listening). **Spec:** [V2_3_MELODY_PROPOSAL.md](V2_3_MELODY_PROPOSAL.md) (approved: editor B · melody off by default · pentatonic per groove · tower light · 3-step Chaos slider · review controls).
+
+**Built (V2.3a only)**
+- `src/audio/lead.ts`: BIT LEAD, a 25% pulse (PeriodicWave, per-context cache) with a 3 ms / 70 ms → 55% / 85% gate / 40 ms envelope, peak 0.16. Written against `BaseAudioContext`.
+- `src/audio/chain.ts`: `createMasterChain(ctx)`, extracted from the engine with no behavior change, shared with future export.
+- `src/data/melody.ts`: `generateMelody(groove, seed, drums)`. Minor pentatonic per groove (A / D / F / E), A A′ B A″ grammar, density bands, interval and leap limits, resolves to the root, avoids kick+snare steps. Seeded retries are validated against the same rules; a safe fallback motif is the last resort.
+- Scheduler: `getMelody` / `triggerNote`. Notes use the drums' exact step time, `StepEvent.note` is set for future visuals, and silent mode skips the lead.
+- Hook: melody state `{notes, seed, on}`, off on first load. A groove change loads its curated melody (seeds 421 / 90 / 128 / 150) and keeps on/off. NEW MELODY is undoable. Undo snapshots include the melody.
+- **Temporary review controls** (transport, third row): `MELODY` toggle (`aria-pressed`, mint when on) · `NEW MELODY` · seed `#0421`. They're replaced by the Pitch Grid editor in V2.3b.
+- Dev-only harness `dev/audio-smoke.html` (not in the production build): offline render, live output-onset measurement, and WAV renders for review.
+
+**Not built yet (by design):** Pitch Grid editor + DRUMS/MELODY tabs + preview strip, the tower "elevator light", Remix Dice v2 / Chaos, product audio export. Clear doesn't affect the melody in V2.3a (to revisit with the editor).

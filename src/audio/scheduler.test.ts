@@ -135,4 +135,50 @@ describe('Scheduler', () => {
     expect(late.length).toBe(0)
     t.s.stop()
   })
+
+  it('V2.3: melody notes are scheduled at exactly the drum step times, and only when on', () => {
+    let clock = 0
+    const drums: { t: TrackId; time: number }[] = []
+    const lead: { midi: number; time: number; dur: number }[] = []
+    let on = true
+    const notes: (number | null)[] = Array(16).fill(null)
+    notes[0] = 57
+    notes[4] = 60
+    notes[13] = 64
+    const s = new Scheduler({
+      now: () => clock,
+      trigger: (t, time) => drums.push({ t, time }),
+      getPattern: () => SIGNAL.pattern,
+      getBpm: () => 120,
+      getMelody: () => ({ on, notes }),
+      triggerNote: (midi, time, dur) => lead.push({ midi, time, dur }),
+      startDelay: 0,
+    })
+    s.start()
+    for (let i = 0; i < 80; i++) {
+      clock += 0.025
+      vi.advanceTimersByTime(25)
+    }
+    // One bar at 120 BPM = 2 s: notes on steps 1, 5, 14.
+    const bar1 = lead.filter((n) => n.time < 2)
+    expect(bar1.map((n) => n.midi)).toEqual([57, 60, 64])
+    expect(bar1.map((n) => +n.time.toFixed(4))).toEqual([0, 0.5, 1.625])
+    // Same timestamps as the drums on those steps (kick on 1 and 14, snare on 5 in SIGNAL).
+    for (const n of bar1) expect(drums.some((d) => Math.abs(d.time - n.time) < 1e-9)).toBe(true)
+    expect(bar1.every((n) => n.dur === 0.125)).toBe(true)
+    // Step events carry the note for the render loop.
+    const evs = s.drain(clock)
+    expect(evs.filter((e) => e.note !== undefined).map((e) => e.step).slice(0, 3)).toEqual([0, 4, 13])
+    // Turning the melody off stops new notes; drums continue.
+    on = false
+    const before = lead.length
+    const drumsBefore = drums.length
+    for (let i = 0; i < 80; i++) {
+      clock += 0.025
+      vi.advanceTimersByTime(25)
+    }
+    expect(lead.length).toBe(before)
+    expect(drums.length).toBeGreaterThan(drumsBefore)
+    s.stop()
+  })
 })

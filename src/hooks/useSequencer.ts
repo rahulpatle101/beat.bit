@@ -17,18 +17,40 @@ import {
   type TrackId,
 } from '@/data/patterns'
 import { remix as rollRemix, type Change } from '@/data/remix'
+import { PROFILES, generateMelody, midiFor, type Melody } from '@/data/melody'
+import type { MelodySource } from '@/audio/scheduler'
 
 interface State {
   pattern: Pattern
   bpm: number
   /** The curated groove the current pattern came from (drives the city mood). */
   grooveId: GrooveId
+  /** V2.3 melody (scale degrees in the groove's key), its seed, and whether it plays. */
+  melody: MelodyState
+}
+
+export interface MelodyState {
+  notes: Melody
+  seed: number
+  on: boolean
+}
+
+/** The groove's curated default melody (keeps the current on/off). */
+function defaultMelody(groove: GrooveId, drums: Pattern, on: boolean): MelodyState {
+  const seed = PROFILES[groove].seed
+  return { notes: generateMelody(groove, seed, drums), seed, on }
+}
+
+/** Resolve scale degrees to MIDI notes in the groove's key, for the scheduler. */
+function melodySource(groove: GrooveId, m: MelodyState): MelodySource {
+  return { on: m.on, notes: m.notes.map((d) => (d === null ? null : midiFor(groove, d))) }
 }
 
 type Action =
   | { type: 'toggle'; track: TrackId; step: number }
   | { type: 'clear' }
-  | { type: 'set'; pattern: Pattern; bpm: number; grooveId: GrooveId }
+  | { type: 'set'; pattern: Pattern; bpm: number; grooveId: GrooveId; melody: MelodyState }
+  | { type: 'melody'; melody: MelodyState }
   | { type: 'bpm'; bpm: number }
 
 function reducer(state: State, action: Action): State {
@@ -41,7 +63,14 @@ function reducer(state: State, action: Action): State {
     case 'clear':
       return { ...state, pattern: emptyPattern() }
     case 'set':
-      return { pattern: clonePattern(action.pattern), bpm: clampBpm(action.bpm), grooveId: action.grooveId }
+      return {
+        pattern: clonePattern(action.pattern),
+        bpm: clampBpm(action.bpm),
+        grooveId: action.grooveId,
+        melody: action.melody,
+      }
+    case 'melody':
+      return { ...state, melody: action.melody }
     case 'bpm':
       return { ...state, bpm: clampBpm(action.bpm) }
   }
@@ -52,8 +81,9 @@ interface Snapshot {
   pattern: Pattern
   bpm: number
   grooveId: GrooveId
+  melody: MelodyState
   /** What replaced this state (for the undo announcement). */
-  by: 'remix' | 'clear' | 'groove'
+  by: 'remix' | 'clear' | 'groove' | 'melody'
 }
 const HISTORY_LIMIT = 30
 
@@ -74,6 +104,9 @@ export interface Sequencer {
   pattern: Pattern
   bpm: number
   grooveId: GrooveId
+  /** V2.3 melody state (on/off, seed). */
+  melodyOn: boolean
+  melodySeed: number
   /** The pattern differs from the curated groove it came from. */
   edited: boolean
   canUndo: boolean
@@ -88,6 +121,10 @@ export interface Sequencer {
   loadGroove: (id: GrooveId) => void
   remix: () => void
   undo: () => void
+  /** V2.3: melody on/off. */
+  toggleMelody: () => void
+  /** V2.3: a new seeded melody for the current groove (undoable). */
+  newMelody: () => void
   setBpm: (bpm: number) => void
   /** Called once per step, at the time the step is heard. */
   onStep: (fn: StepListener) => () => void
@@ -109,7 +146,8 @@ export interface Sequencer {
 export function useSequencer(): Sequencer {
   const [state, dispatch] = useReducer(reducer, undefined, () => {
     const g = grooveById('signal')
-    return { pattern: clonePattern(g.pattern), bpm: g.bpm, grooveId: g.id }
+    // Melody is OFF on first load, so first Play is identical to V2.2.
+    return { pattern: clonePattern(g.pattern), bpm: g.bpm, grooveId: g.id, melody: defaultMelody(g.id, g.pattern, false) }
   })
   const [playing, setPlaying] = useState(false)
   const [audioStatus, setAudioStatus] = useState<AudioStatus>('locked')
@@ -128,6 +166,14 @@ export function useSequencer(): Sequencer {
   useEffect(() => {
     grooveRef.current = state.grooveId
   }, [state.grooveId])
+
+  // V2.3: the scheduler reads the melody (resolved to MIDI) through a ref, like the pattern.
+  const melodyStateRef = useRef<MelodyState>(state.melody)
+  const melodyRef = useRef<MelodySource>(melodySource(state.grooveId, state.melody))
+  useEffect(() => {
+    melodyStateRef.current = state.melody
+    melodyRef.current = melodySource(state.grooveId, state.melody)
+  }, [state.melody, state.grooveId])
 
   /** Undo history (newest last) + whether Undo is available (for the button). */
   const historyRef = useRef<Snapshot[]>([])
@@ -192,6 +238,11 @@ export function useSequencer(): Sequencer {
       },
       getPattern: () => patternRef.current,
       getBpm: () => bpmRef.current,
+      getMelody: () => melodyRef.current,
+      // Like drums: only the audio clock may schedule sound (silent mode skips the lead).
+      triggerNote: (midi, time, stepSec) => {
+        if (clockRef.current !== silentClock) engine.triggerLead(midi, time, stepSec)
+      },
     })
     engineRef.current = engine
     schedulerRef.current = scheduler
@@ -301,17 +352,26 @@ export function useSequencer(): Sequencer {
   /** Record the current state so Undo can restore it. */
   const pushHistory = useCallback((by: Snapshot['by']) => {
     const h = historyRef.current
-    h.push({ pattern: clonePattern(patternRef.current), bpm: bpmRef.current, grooveId: grooveRef.current, by })
+    h.push({
+      pattern: clonePattern(patternRef.current),
+      bpm: bpmRef.current,
+      grooveId: grooveRef.current,
+      melody: melodyStateRef.current,
+      by,
+    })
     if (h.length > HISTORY_LIMIT) h.shift()
     setCanUndo(true)
   }, [])
 
   /** Apply a whole-pattern change now (refs first, so the scheduler and rapid presses see it). */
-  const setAll = useCallback((pattern: Pattern, bpm: number, grooveId: GrooveId) => {
+  const setAll = useCallback((pattern: Pattern, bpm: number, grooveId: GrooveId, melody?: MelodyState) => {
+    const m = melody ?? melodyStateRef.current
     patternRef.current = pattern
     bpmRef.current = clampBpm(bpm)
     grooveRef.current = grooveId
-    dispatch({ type: 'set', pattern, bpm, grooveId })
+    melodyStateRef.current = m
+    melodyRef.current = melodySource(grooveId, m)
+    dispatch({ type: 'set', pattern, bpm, grooveId, melody: m })
   }, [])
 
   const clear = useCallback(() => {
@@ -328,10 +388,13 @@ export function useSequencer(): Sequencer {
     (id: GrooveId) => {
       const g = grooveById(id)
       const unchanged =
-        grooveRef.current === id && bpmRef.current === g.bpm && samePattern(patternRef.current, g.pattern)
+        grooveRef.current === id &&
+        bpmRef.current === g.bpm &&
+        samePattern(patternRef.current, g.pattern) &&
+        melodyStateRef.current.seed === PROFILES[id].seed
       if (!unchanged) pushHistory('groove')
       remixOriginRef.current = null
-      setAll(clonePattern(g.pattern), g.bpm, g.id)
+      setAll(clonePattern(g.pattern), g.bpm, g.id, defaultMelody(g.id, g.pattern, melodyStateRef.current.on))
       emitCue('groove')
       announce(`${g.name} loaded, ${g.bpm} BPM`)
     },
@@ -356,9 +419,9 @@ export function useSequencer(): Sequencer {
     if (!snap) return
     const wasEmpty = isEmpty(patternRef.current)
     remixOriginRef.current = null
-    setAll(snap.pattern, snap.bpm, snap.grooveId)
+    setAll(snap.pattern, snap.bpm, snap.grooveId, snap.melody)
     if (wasEmpty && !isEmpty(snap.pattern)) emitCue('non-empty')
-    const what = snap.by === 'remix' ? 'remix' : snap.by === 'clear' ? 'clear' : 'groove change'
+    const what = { remix: 'remix', clear: 'clear', groove: 'groove change', melody: 'new melody' }[snap.by]
     announce(`Undid ${what}. ${grooveById(snap.grooveId).name}, ${snap.bpm} BPM`)
   }, [announce, emitCue, setAll])
 
@@ -399,6 +462,26 @@ export function useSequencer(): Sequencer {
     }
   }, [])
 
+  const toggleMelody = useCallback(() => {
+    const m = { ...melodyStateRef.current, on: !melodyStateRef.current.on }
+    melodyStateRef.current = m
+    melodyRef.current = melodySource(grooveRef.current, m)
+    dispatch({ type: 'melody', melody: m })
+    announce(m.on ? `Melody on, #${String(m.seed).padStart(4, '0')}` : 'Melody off')
+  }, [announce])
+
+  const newMelody = useCallback(() => {
+    pushHistory('melody')
+    const prev = melodyStateRef.current
+    let seed = prev.seed
+    while (seed === prev.seed) seed = 1 + Math.floor(Math.random() * 9999)
+    const m: MelodyState = { notes: generateMelody(grooveRef.current, seed, patternRef.current), seed, on: true }
+    melodyStateRef.current = m
+    melodyRef.current = melodySource(grooveRef.current, m)
+    dispatch({ type: 'melody', melody: m })
+    announce(`New melody #${String(seed).padStart(4, '0')}. Undo available.`)
+  }, [announce, pushHistory])
+
   const onRemix = useCallback((fn: RemixListener) => {
     remixListeners.current.add(fn)
     return () => {
@@ -414,6 +497,8 @@ export function useSequencer(): Sequencer {
     grooveId: state.grooveId,
     edited,
     canUndo,
+    melodyOn: state.melody.on,
+    melodySeed: state.melody.seed,
     bpm: state.bpm,
     playing,
     audioStatus,
@@ -425,6 +510,8 @@ export function useSequencer(): Sequencer {
     loadGroove,
     remix,
     undo,
+    toggleMelody,
+    newMelody,
     setBpm,
     onStep,
     onTransport,

@@ -5,6 +5,13 @@
 
 import { STEPS, TRACK_IDS, type Pattern, type TrackId } from '@/data/patterns'
 
+/** What the scheduler needs to know about the melody at schedule time (V2.3). */
+export interface MelodySource {
+  on: boolean
+  /** MIDI note per step (null = rest), already resolved to the groove's key. */
+  notes: (number | null)[]
+}
+
 export interface StepEvent {
   step: number
   /** Clock time (seconds) the step sounds at. */
@@ -12,6 +19,8 @@ export interface StepEvent {
   /** Duration of one step at the tempo it was scheduled with. */
   duration: number
   tracks: TrackId[]
+  /** MIDI note of the melody on this step, if any (V2.3). */
+  note?: number
 }
 
 export interface SchedulerDeps {
@@ -19,6 +28,10 @@ export interface SchedulerDeps {
   trigger: (track: TrackId, time: number) => void
   getPattern: () => Pattern
   getBpm: () => number
+  /** V2.3 melody: read at schedule time, like the pattern. */
+  getMelody?: () => MelodySource
+  /** V2.3 melody: play a lead note at the step's exact time. */
+  triggerNote?: (midi: number, time: number, stepSec: number) => void
   /** Seconds to schedule ahead. */
   lookahead?: number
   /** Timer interval in ms. */
@@ -97,7 +110,12 @@ export class Scheduler {
     const pattern = this.deps.getPattern()
     const tracks = TRACK_IDS.filter((id) => pattern[id][step])
     for (const t of tracks) this.deps.trigger(t, time)
-    this.queue.push({ step, time, duration: stepDuration(this.deps.getBpm()), tracks })
+    const duration = stepDuration(this.deps.getBpm())
+    // Melody notes share the drums' exact step time (same clock, same lookahead).
+    const melody = this.deps.getMelody?.()
+    const note = melody?.on ? melody.notes[step] ?? undefined : undefined
+    if (note !== undefined && note !== null) this.deps.triggerNote?.(note, time, duration)
+    this.queue.push({ step, time, duration, tracks, ...(note != null ? { note } : {}) })
   }
 
   /** Remove and return every queued step whose time has arrived. */

@@ -2,6 +2,8 @@
 // The context is only created inside a user gesture (unlock), to respect autoplay rules.
 
 import type { TrackId } from '@/data/patterns'
+import { createMasterChain } from './chain'
+import { playLead } from './lead'
 import { VOICES, createNoiseBuffer } from './voices'
 
 export type AudioStatus = 'locked' | 'running' | 'blocked'
@@ -10,7 +12,8 @@ const UNLOCK_TIMEOUT_MS = 300
 
 export class AudioEngine {
   private ctx: AudioContext | null = null
-  private compressor: DynamicsCompressorNode | null = null
+  /** Master chain input (shared builder with future offline export). */
+  private compressor: AudioNode | null = null
   /** Per-transport bus. Swapped out on cut() so already-scheduled notes go silent. */
   private bus: GainNode | null = null
   private noise: AudioBuffer | null = null
@@ -31,15 +34,7 @@ export class AudioEngine {
 
   private build(): AudioContext {
     const ctx = new AudioContext({ latencyHint: 'interactive' })
-    const compressor = ctx.createDynamicsCompressor()
-    compressor.threshold.value = -16
-    compressor.knee.value = 8
-    compressor.ratio.value = 4
-    compressor.attack.value = 0.003
-    compressor.release.value = 0.15
-    const master = ctx.createGain()
-    master.gain.value = 0.85
-    compressor.connect(master).connect(ctx.destination)
+    const compressor = createMasterChain(ctx).input
 
     ctx.addEventListener('statechange', () => {
       if (this.disposed || this.ctx !== ctx) return
@@ -100,6 +95,12 @@ export class AudioEngine {
   trigger(track: TrackId, time: number) {
     if (!this.ctx || !this.bus || !this.noise || this.ctx.state !== 'running') return
     VOICES[track](this.ctx, this.bus, Math.max(time, this.ctx.currentTime), this.noise)
+  }
+
+  /** BIT LEAD note (melody). Same bus as the drums, so Stop's cut() silences it too. */
+  triggerLead(midi: number, time: number, stepSec: number) {
+    if (!this.ctx || !this.bus || this.ctx.state !== 'running') return
+    playLead(this.ctx, this.bus, Math.max(time, this.ctx.currentTime), midi, stepSec)
   }
 
   /** Silence everything scheduled or sounding, immediately (Stop). */

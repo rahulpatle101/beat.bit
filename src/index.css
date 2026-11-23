@@ -49,6 +49,7 @@
     --color-snare: var(--snare);
     --color-hat: var(--hat);
     --color-clap: var(--clap);
+    --color-lead: var(--lead);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -106,6 +107,7 @@
     --snare: #f0b54a;
     --hat: #5cc6d3;
     --clap: #a88bf2;
+    --lead: #6fcf97; /* V2.3 melody (BIT LEAD): 8.06:1 on --cell */
     --sky-1: #0f1220;
     --sky-2: #141830;
     --building: #1a1d26;

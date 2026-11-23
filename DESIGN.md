@@ -475,3 +475,66 @@ idle ──Play──► switchingOn ──4 frames──► on ◄──note re
 - [ ] No regressions: 8/8 existing tests pass plus new unit tests, the Phase 0 Chrome regression suite passes, and there are no console errors.
 - [ ] The audio engine, scheduler, and sequencer grid are unchanged apart from the two hook channels in §V4.
 - [ ] BUILD_STATUS.md is updated with what was verified and how.
+
+
+---
+
+## V2.2 — Playfulness: Curated Grooves + Remix Dice
+
+**Status:** ✅ Implemented on 2026-11-23 per the V2.2 brief ("PLAY → REMIX"). Awaiting your review. **Scope:** PLAY and REMIX only. No City Energy, challenges, accounts, or sharing.
+
+### Decisions (and deviations from V2_ROADMAP V2.2)
+
+| # | Decision | Why |
+|---|---|---|
+| P1 | **4 grooves:** SIGNAL (starter, unchanged) + **BOOM BAP 90 · TECHNO 128 · BOSS FIGHT 150**. LO-FI dropped. | The brief asks for three presets. SIGNAL stays the approved first-visit groove. |
+| P2 | Picker is an **8bitcn Toggle Group** (visible buttons), not a Select | All choices visible at once supports "understood within 5 seconds". One Tab stop with arrow keys (Radix roving focus). |
+| P3 | Moods are **sky tints only**. The BIT sign doesn't change to "BOSS". | A 4-letter sign would change the approved tower geometry. The sign stays the brand anchor. |
+| P4 | The GROOVE button (V1 §6) is replaced by the picker. Pressing the active groove again reloads it. | Restore-to-preset is still one click |
+| P5 | **Undo** covers Remix, Clear, and groove changes (30-step history) | The brief requires a way to restore the previous pattern. Clear becomes safely undoable too. |
+| P6 | Header tagline: "A tiny pixel world that performs the beat you make." | 5-second comprehension of the positioning |
+
+### Curated grooves (1-indexed steps)
+
+| Groove | BPM | Kick | Snare | Hi-hat | Clap | Mood (sky top / horizon) |
+|---|---|---|---|---|---|---|
+| SIGNAL | 104 | 1, 7, 9, 14 | 5, 13 | 8ths + 16 | 13, 16 | night (V1 `--sky-1/2`) |
+| BOOM BAP | 90 | 1, 7, 11 | 5, 13 | 8ths + 16 | 13 | warm `#16111a / #241921` |
+| TECHNO | 128 | 1, 5, 9, 13 | 16 | 3, 7, 11, 15 (offbeats) | 5, 13 | teal `#0b1419 / #0f222a` |
+| BOSS FIGHT | 150 | 1, 3, 7, 9, 11, 15 | 5, 13, 14 | all 16ths | 5, 13 | red `#190c13 / #290f19` |
+
+Grooves load immediately, even during playback: the pattern and BPM change from the next scheduled step and the transport isn't restarted. The mood swaps on the next frame. While playing, the V2.1 ripple runs.
+
+### Remix Dice rules (`src/data/remix.ts`, pure + seeded in tests)
+
+1. **Identity:** kick and snare notes on steps 1/5/9/13 of the chain's **origin** are anchors and never change. The origin is the pattern before the first of a run of consecutive remixes; any manual edit, Clear, groove change, or Undo starts a new run.
+2. **Noticeable but coherent:** every roll changes **2–4 cells**, and at least one is on kick, snare, or clap.
+3. **Musical moves only:** kick pickup ("a"/"and"), kick push/pull by one 16th, kick thinning, snare ghost (around backbeats), clap layer / fill clap, turnaround in the last beat, hat density ±.
+4. **Caps:** kick ≤ 6, snare ≤ 4, clap ≤ 4 (or the origin's count if higher). A track that had notes is never emptied.
+5. **Drift limit:** a run of rolls stays within **8 cells** of the origin. When needed, a roll first reverts toward the origin (restoring original notes first).
+6. **Empty pattern:** Remix builds a simple backbone (kick 1, 9 · snare 5, 13 · 8th hats).
+7. Remix during playback edits the pattern the scheduler reads. There's no transport restart, and timing is untouched.
+
+### Remix feedback (UI response, not beat timing)
+
+| Element | Normal motion | Reduced motion |
+|---|---|---|
+| Grid | Changed cells: added = ink ring pop, removed = fading track-color ghost, 3 stepped frames (360 ms) | Static ring for 420 ms, no animation |
+| Die icon on REMIX | Tumbles through 3 faces (~180 ms), lands on the number of changes | Jumps to the result |
+| City | "Dice tumble": 5 random windows flicker amber for 3 pixel frames | None |
+| Live region | "Remixed: N changes. Undo available." · "Undid remix / clear / groove change. GROOVE, N BPM" · "BOOM BAP loaded, 90 BPM" | Same |
+
+### Keyboard (additions to §9)
+
+Tab order: PLAY → Tempo → **Groove picker** (one stop; ←/→ move, Enter/Space select) → **REMIX** → **UNDO** (skipped while disabled) → CLEAR → grid. All of them show the square 2px focus ring.
+
+### V2.2 acceptance criteria
+
+- [x] Each groove plays in time at its BPM, loads mid-playback with no skipped or repeated steps, updates the picker, mood, and readout, and is announced.
+- [ ] **You approve the three new grooves by ear** (synthesized kit; not yet heard by a human).
+- [x] Every Remix changes 2–4 cells, with at least one audible; anchors kept; drift ≤ 8; never empties a track; works during playback with no timing change.
+- [x] Undo restores exact previous states in order (remix, clear, groove change) and is disabled when empty.
+- [x] Remix feedback appears on exactly the changed cells; reduced motion removes the animation, tumble, and die roll.
+- [x] Keyboard-operable picker, Remix, and Undo with visible focus.
+- [x] No horizontal overflow at 375 px @ 2×. Picker buttons are 40 px tall.
+- [x] V2.1 performers and audio sync unchanged (probe + regression suite).

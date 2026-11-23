@@ -181,9 +181,50 @@
   }
 }
 
+/* V2.2 Remix roll: added notes pop with an ink ring; removed notes leave a fading
+   track-colour ghost. 3 stepped frames (~360 ms). */
+.seq-cell.is-rolled[data-rolled='on'] {
+  z-index: 3;
+  animation: seq-roll-on 360ms steps(3, end);
+}
+.seq-cell.is-rolled[data-rolled='off'] {
+  z-index: 3;
+  animation: seq-roll-off 360ms steps(3, end);
+}
+@keyframes seq-roll-on {
+  from {
+    filter: brightness(1.35);
+    box-shadow: 0 0 0 4px var(--ink);
+  }
+  to {
+    filter: brightness(1);
+    box-shadow: 0 0 0 0 var(--ink);
+  }
+}
+@keyframes seq-roll-off {
+  from {
+    box-shadow:
+      inset 0 0 0 4px var(--c),
+      0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent);
+  }
+  to {
+    box-shadow:
+      inset 0 0 0 2px var(--edge),
+      0 0 0 0 transparent;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .seq-cell.is-hit[aria-pressed='true'] {
     animation: none;
+  }
+  /* Reduced motion: a static ring for the highlight's duration, no stepping or flash. */
+  .seq-cell.is-rolled[data-rolled='on'],
+  .seq-cell.is-rolled[data-rolled='off'] {
+    animation: none;
+    box-shadow:
+      inset 0 0 0 2px var(--edge),
+      0 0 0 3px var(--ink);
   }
   .seq-cell:active {
     transform: none;

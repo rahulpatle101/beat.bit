@@ -259,3 +259,21 @@ All durations are measured from the moment the sound is heard. `s` = the step le
 - Extra characters, buildings, scenes, weather, parallax, or camera moves.
 - Idle "dancing". Performers move only on sound.
 - New glow, and colors outside the token set.
+
+
+---
+
+## V2.2 Addendum — Groove moods
+
+**Status:** ✅ Implemented on 2026-11-23 (approved V2 decision 7: "lightweight palette and atmosphere variations").
+
+Each curated groove tints the **sky only**: the two-tone dither pair behind the skyline. Buildings, windows, performers, the BIT sign, and all UI tokens are unchanged, so contrast and the "city is the hero" hierarchy hold.
+
+| Groove | Mood | Sky top / horizon |
+|---|---|---|
+| SIGNAL | night | V1 `#0f1220 / #141830` |
+| BOOM BAP | warm | `#16111a / #241921` |
+| TECHNO | teal | `#0b1419 / #0f222a` |
+| BOSS FIGHT | red | `#190c13 / #290f19` |
+
+The BIT sign stays "BIT" (a "BOSS" sign would change the approved tower geometry). Remix adds a 3-frame "dice tumble" in the windows: amber, restrained, and off with reduced motion.

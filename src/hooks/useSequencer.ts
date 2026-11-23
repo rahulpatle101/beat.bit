@@ -6,24 +6,29 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { AudioEngine, type AudioStatus } from '@/audio/engine'
 import { Scheduler, stepDuration, type StepEvent } from '@/audio/scheduler'
 import {
-  SIGNAL,
   clampBpm,
   clonePattern,
   emptyPattern,
+  grooveById,
   isEmpty,
+  samePattern,
+  type GrooveId,
   type Pattern,
   type TrackId,
 } from '@/data/patterns'
+import { remix as rollRemix, type Change } from '@/data/remix'
 
 interface State {
   pattern: Pattern
   bpm: number
+  /** The curated groove the current pattern came from (drives the city mood). */
+  grooveId: GrooveId
 }
 
 type Action =
   | { type: 'toggle'; track: TrackId; step: number }
   | { type: 'clear' }
-  | { type: 'load'; pattern: Pattern; bpm: number }
+  | { type: 'set'; pattern: Pattern; bpm: number; grooveId: GrooveId }
   | { type: 'bpm'; bpm: number }
 
 function reducer(state: State, action: Action): State {
@@ -35,12 +40,22 @@ function reducer(state: State, action: Action): State {
     }
     case 'clear':
       return { ...state, pattern: emptyPattern() }
-    case 'load':
-      return { pattern: clonePattern(action.pattern), bpm: clampBpm(action.bpm) }
+    case 'set':
+      return { pattern: clonePattern(action.pattern), bpm: clampBpm(action.bpm), grooveId: action.grooveId }
     case 'bpm':
       return { ...state, bpm: clampBpm(action.bpm) }
   }
 }
+
+/** Undo history entry: the state before a remix, clear, or groove change. */
+interface Snapshot {
+  pattern: Pattern
+  bpm: number
+  grooveId: GrooveId
+  /** What replaced this state (for the undo announcement). */
+  by: 'remix' | 'clear' | 'groove'
+}
+const HISTORY_LIMIT = 30
 
 /** `frameTime` is the rAF timestamp of the frame publishing the step (same timebase as FrameListener). */
 export type StepListener = (e: StepEvent, frameTime: number) => void
@@ -52,10 +67,16 @@ export type SceneCueName = 'cleared' | 'groove' | 'non-empty'
 export type CueListener = (cue: SceneCueName) => void
 /** An audition sound (step toggled on while stopped) was heard at `frameTime`. */
 export type AuditionListener = (track: TrackId, stepMs: number, frameTime: number) => void
+/** A remix was applied: the changed cells (for the grid's roll flash and the scene). */
+export type RemixListener = (changes: Change[]) => void
 
 export interface Sequencer {
   pattern: Pattern
   bpm: number
+  grooveId: GrooveId
+  /** The pattern differs from the curated groove it came from. */
+  edited: boolean
+  canUndo: boolean
   playing: boolean
   audioStatus: AudioStatus
   /** Latest polite announcement for the live region. */
@@ -64,7 +85,9 @@ export interface Sequencer {
   stop: (reason?: string) => void
   toggle: (track: TrackId, step: number) => void
   clear: () => void
-  loadGroove: () => void
+  loadGroove: (id: GrooveId) => void
+  remix: () => void
+  undo: () => void
   setBpm: (bpm: number) => void
   /** Called once per step, at the time the step is heard. */
   onStep: (fn: StepListener) => () => void
@@ -79,13 +102,15 @@ export interface Sequencer {
   onCue: (fn: CueListener) => () => void
   /** Audition sounds, published by the render loop when heard. */
   onAudition: (fn: AuditionListener) => () => void
+  /** Remix rolls (UI response, not beat timing). */
+  onRemix: (fn: RemixListener) => () => void
 }
 
 export function useSequencer(): Sequencer {
-  const [state, dispatch] = useReducer(reducer, undefined, () => ({
-    pattern: clonePattern(SIGNAL.pattern),
-    bpm: SIGNAL.bpm,
-  }))
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const g = grooveById('signal')
+    return { pattern: clonePattern(g.pattern), bpm: g.bpm, grooveId: g.id }
+  })
   const [playing, setPlaying] = useState(false)
   const [audioStatus, setAudioStatus] = useState<AudioStatus>('locked')
   const [announcement, setAnnouncement] = useState('')
@@ -99,6 +124,17 @@ export function useSequencer(): Sequencer {
   useEffect(() => {
     bpmRef.current = state.bpm
   }, [state.bpm])
+  const grooveRef = useRef<GrooveId>(state.grooveId)
+  useEffect(() => {
+    grooveRef.current = state.grooveId
+  }, [state.grooveId])
+
+  /** Undo history (newest last) + whether Undo is available (for the button). */
+  const historyRef = useRef<Snapshot[]>([])
+  const [canUndo, setCanUndo] = useState(false)
+  /** The pattern a run of consecutive remixes started from (identity + drift anchor). */
+  const remixOriginRef = useRef<Pattern | null>(null)
+  const remixListeners = useRef(new Set<RemixListener>())
 
   const engineRef = useRef<AudioEngine | null>(null)
   const schedulerRef = useRef<Scheduler | null>(null)
@@ -242,6 +278,7 @@ export function useSequencer(): Sequencer {
     (track: TrackId, step: number) => {
       const turningOn = !patternRef.current[track][step]
       const wasEmpty = isEmpty(patternRef.current)
+      remixOriginRef.current = null // a manual edit starts a new remix identity
       dispatch({ type: 'toggle', track, step })
       // First note after an empty pattern: the scene's lights return (after a blackout).
       if (turningOn && wasEmpty) emitCue('non-empty')
@@ -261,17 +298,69 @@ export function useSequencer(): Sequencer {
     [emitCue],
   )
 
+  /** Record the current state so Undo can restore it. */
+  const pushHistory = useCallback((by: Snapshot['by']) => {
+    const h = historyRef.current
+    h.push({ pattern: clonePattern(patternRef.current), bpm: bpmRef.current, grooveId: grooveRef.current, by })
+    if (h.length > HISTORY_LIMIT) h.shift()
+    setCanUndo(true)
+  }, [])
+
+  /** Apply a whole-pattern change now (refs first, so the scheduler and rapid presses see it). */
+  const setAll = useCallback((pattern: Pattern, bpm: number, grooveId: GrooveId) => {
+    patternRef.current = pattern
+    bpmRef.current = clampBpm(bpm)
+    grooveRef.current = grooveId
+    dispatch({ type: 'set', pattern, bpm, grooveId })
+  }, [])
+
   const clear = useCallback(() => {
+    if (isEmpty(patternRef.current)) return
+    pushHistory('clear')
+    remixOriginRef.current = null
+    patternRef.current = emptyPattern()
     dispatch({ type: 'clear' })
     emitCue('cleared')
-    announce('Pattern cleared')
-  }, [announce, emitCue])
+    announce('Pattern cleared. Undo available.')
+  }, [announce, emitCue, pushHistory])
 
-  const loadGroove = useCallback(() => {
-    dispatch({ type: 'load', pattern: SIGNAL.pattern, bpm: SIGNAL.bpm })
-    emitCue('groove')
-    announce(`Groove loaded, ${SIGNAL.bpm} BPM`)
-  }, [announce, emitCue])
+  const loadGroove = useCallback(
+    (id: GrooveId) => {
+      const g = grooveById(id)
+      const unchanged =
+        grooveRef.current === id && bpmRef.current === g.bpm && samePattern(patternRef.current, g.pattern)
+      if (!unchanged) pushHistory('groove')
+      remixOriginRef.current = null
+      setAll(clonePattern(g.pattern), g.bpm, g.id)
+      emitCue('groove')
+      announce(`${g.name} loaded, ${g.bpm} BPM`)
+    },
+    [announce, emitCue, pushHistory, setAll],
+  )
+
+  const remix = useCallback(() => {
+    const current = patternRef.current
+    const origin = remixOriginRef.current ?? current
+    const { pattern, changes } = rollRemix(current, origin)
+    pushHistory('remix')
+    remixOriginRef.current = isEmpty(current) ? pattern : origin
+    setAll(pattern, bpmRef.current, grooveRef.current)
+    for (const fn of remixListeners.current) fn(changes)
+    if (isEmpty(current)) emitCue('non-empty')
+    announce(`Remixed: ${changes.length} changes. Undo available.`)
+  }, [announce, emitCue, pushHistory, setAll])
+
+  const undo = useCallback(() => {
+    const snap = historyRef.current.pop()
+    setCanUndo(historyRef.current.length > 0)
+    if (!snap) return
+    const wasEmpty = isEmpty(patternRef.current)
+    remixOriginRef.current = null
+    setAll(snap.pattern, snap.bpm, snap.grooveId)
+    if (wasEmpty && !isEmpty(snap.pattern)) emitCue('non-empty')
+    const what = snap.by === 'remix' ? 'remix' : snap.by === 'clear' ? 'clear' : 'groove change'
+    announce(`Undid ${what}. ${grooveById(snap.grooveId).name}, ${snap.bpm} BPM`)
+  }, [announce, emitCue, setAll])
 
   const setBpm = useCallback((bpm: number) => dispatch({ type: 'bpm', bpm }), [])
 
@@ -310,8 +399,21 @@ export function useSequencer(): Sequencer {
     }
   }, [])
 
+  const onRemix = useCallback((fn: RemixListener) => {
+    remixListeners.current.add(fn)
+    return () => {
+      remixListeners.current.delete(fn)
+    }
+  }, [])
+
+  const groove = grooveById(state.grooveId)
+  const edited = !samePattern(groove.pattern, state.pattern)
+
   return {
     pattern: state.pattern,
+    grooveId: state.grooveId,
+    edited,
+    canUndo,
     bpm: state.bpm,
     playing,
     audioStatus,
@@ -321,12 +423,15 @@ export function useSequencer(): Sequencer {
     toggle,
     clear,
     loadGroove,
+    remix,
+    undo,
     setBpm,
     onStep,
     onTransport,
     onFrame,
     onCue,
     onAudition,
+    onRemix,
   }
 }
 

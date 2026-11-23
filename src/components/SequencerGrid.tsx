@@ -18,7 +18,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { STEPS, TRACKS, type Pattern, type TrackId } from '@/data/patterns'
-import type { StepListener, TransportListener } from '@/hooks/useSequencer'
+import type { RemixListener, StepListener, TransportListener } from '@/hooks/useSequencer'
 import { TrackGlyph } from './TrackGlyph'
 import './sequencer.css'
 
@@ -27,6 +27,7 @@ interface Props {
   onToggle: (track: TrackId, step: number) => void
   onStep: (fn: StepListener) => () => void
   onTransport: (fn: TransportListener) => () => void
+  onRemix: (fn: RemixListener) => () => void
 }
 
 const ROWS = TRACKS.length
@@ -44,7 +45,7 @@ const place = (t: number, s: number) =>
     '--cm': col(s % 8),
   }) as CSSProperties
 
-export function SequencerGrid({ pattern, onToggle, onStep, onTransport }: Props) {
+export function SequencerGrid({ pattern, onToggle, onStep, onTransport, onRemix }: Props) {
   const cells = useRef<(HTMLButtonElement | null)[]>([]) // index = t * STEPS + s
   const [focus, setFocus] = useState({ t: 0, s: 0 })
   const register = useCallback((i: number, el: HTMLButtonElement | null) => {
@@ -88,6 +89,31 @@ export function SequencerGrid({ pattern, onToggle, onStep, onTransport }: Props)
       offTransport()
     }
   }, [onStep, onTransport])
+
+  // V2.2 Remix: changed cells get a short stepped "roll" ring (on = ink pop, off = ghost).
+  useEffect(() => {
+    const timers = new Set<ReturnType<typeof setTimeout>>()
+    const off = onRemix((changes) => {
+      for (const ch of changes) {
+        const t = TRACKS.findIndex((tr) => tr.id === ch.track)
+        const el = cells.current[t * STEPS + ch.step]
+        if (!el) continue
+        el.classList.remove('is-rolled')
+        void el.offsetWidth // restart the animation on repeated rolls
+        el.dataset.rolled = ch.on ? 'on' : 'off'
+        el.classList.add('is-rolled')
+        const id = setTimeout(() => {
+          el.classList.remove('is-rolled')
+          timers.delete(id)
+        }, 420)
+        timers.add(id)
+      }
+    })
+    return () => {
+      off()
+      for (const id of timers) clearTimeout(id)
+    }
+  }, [onRemix])
 
   const moveFocus = useCallback((t: number, s: number) => {
     const nt = Math.min(ROWS - 1, Math.max(0, t))

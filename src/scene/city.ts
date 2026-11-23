@@ -7,7 +7,7 @@
 // Timing rule: rhythmic motion comes only from heard sound events (step(), audition()).
 // Moments come from transport/UI cues and use fixed pixel-frame counts.
 
-import type { TrackId } from '@/data/patterns'
+import type { MoodId, TrackId } from '@/data/patterns'
 import {
   AMBIENT_WINDOWS,
   ANTENNA_X,
@@ -55,7 +55,15 @@ export interface Palette {
   wire: string
 }
 
-export type SceneCue = 'start' | 'stop' | 'cleared' | 'groove' | 'non-empty'
+export type SceneCue = 'start' | 'stop' | 'cleared' | 'groove' | 'non-empty' | 'remix'
+
+/** V2.2 city moods: subtle sky tints per groove (top / horizon dither pair). */
+export const MOODS: Record<MoodId, { sky1: string; sky2: string }> = {
+  night: { sky1: '', sky2: '' }, // '' = the V1 palette sky (--sky-1 / --sky-2)
+  warm: { sky1: '#16111a', sky2: '#241921' },
+  teal: { sky1: '#0b1419', sky2: '#0f222a' },
+  red: { sky1: '#190c13', sky2: '#290f19' },
+}
 
 // 4×4 Bayer matrix for the sky's two-tone ordered dither.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
@@ -100,6 +108,12 @@ export class CityScene {
   private rippleAt = -Infinity
   private cues: SceneCue[] = []
 
+  // V2.2
+  private skies = new Map<MoodId, HTMLCanvasElement>()
+  private mood: MoodId = 'night'
+  private rollAt = -Infinity
+  private rollSeed = 1
+
   constructor(canvas: HTMLCanvasElement, palette: Palette) {
     canvas.width = W
     canvas.height = H
@@ -108,7 +122,8 @@ export class CityScene {
     ctx.imageSmoothingEnabled = false
     this.ctx = ctx
     this.p = palette
-    this.sky = this.buildSky()
+    this.sky = this.buildSky('night')
+    this.skies.set('night', this.sky)
     this.city = this.buildCity()
     this.performers = new Performers({
       actor: palette.actor,
@@ -139,14 +154,28 @@ export class CityScene {
     return el
   }
 
-  private buildSky() {
+  /** Switch the sky tint (cached per mood). Visual only; applied on the next frame. */
+  setMood(mood: MoodId) {
+    if (mood === this.mood) return
+    this.mood = mood
+    let sky = this.skies.get(mood)
+    if (!sky) {
+      sky = this.buildSky(mood)
+      this.skies.set(mood, sky)
+    }
+    this.sky = sky
+  }
+
+  private buildSky(mood: MoodId) {
+    const sky1 = MOODS[mood].sky1 || this.p.sky1
+    const sky2 = MOODS[mood].sky2 || this.p.sky2
     return this.layer((c) => {
       // Vertical two-tone ordered dither: darker at the top, lighter toward the horizon.
       for (let y = 0; y < GROUND; y++) {
         const t = y / GROUND // 0 → 1
         for (let x = 0; x < W; x++) {
           const threshold = (BAYER[(y % 4) * 4 + (x % 4)] + 0.5) / 16
-          c.fillStyle = t > threshold ? this.p.sky2 : this.p.sky1
+          c.fillStyle = t > threshold ? sky2 : sky1
           c.fillRect(x, y, 1, 1)
         }
       }
@@ -252,6 +281,10 @@ export class CityScene {
         if (this.mode === 'dark') this.applyCue('non-empty', now)
         else if (this.mode === 'on') this.rippleAt = now
         break
+      case 'remix':
+        this.rollAt = now
+        this.rollSeed = (this.rollSeed * 16807) % 2147483647
+        break
     }
   }
 
@@ -326,6 +359,19 @@ export class CityScene {
         const rc = Math.floor(x / 54) // 3-frame ripple
         const rippling = !rm && rippleAge >= rc * FRAME && rippleAge < (rc + 1) * FRAME
         c.globalAlpha = rippling ? 0.75 : 0.3
+        c.fillRect(x, y + dy, 2, 2)
+      }
+      c.globalAlpha = 1
+    }
+
+    // V2.2 remix tumble: for 3 pixel frames a few random windows flicker like dice faces.
+    const rollAge = now - this.rollAt
+    if (!rm && rollAge >= 0 && rollAge < 3 * FRAME) {
+      const rr = mulberry32(this.rollSeed + Math.floor(rollAge / FRAME))
+      c.fillStyle = p.snare
+      c.globalAlpha = 0.8
+      for (let k = 0; k < 5; k++) {
+        const [x, y] = WINDOWS[SNARE_CANDIDATES[Math.floor(rr() * SNARE_CANDIDATES.length)]]
         c.fillRect(x, y + dy, 2, 2)
       }
       c.globalAlpha = 1

@@ -5,7 +5,9 @@ import { Kbd } from '@/components/ui/8bit/kbd'
 import { CityScene } from '@/components/CityScene'
 import { SequencerGrid } from '@/components/SequencerGrid'
 import { TransportControls } from '@/components/TransportControls'
+import { useEffect, useState } from 'react'
 import type { AudioStatus } from '@/audio/engine'
+import { grooveById } from '@/data/patterns'
 import { useSequencer } from '@/hooks/useSequencer'
 
 const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'default' | 'destructive' }> = {
@@ -17,13 +19,21 @@ const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'defau
 export default function App() {
   const seq = useSequencer()
   const status = STATUS[seq.audioStatus]
+  const { onRemix } = seq
+
+  // Remix die: rollKey changes on every roll; rollSize = how many cells it changed.
+  const [roll, setRoll] = useState({ key: 0, size: 5 })
+  useEffect(() => onRemix((changes) => setRoll((r) => ({ key: r.key + 1, size: changes.length }))), [onRemix])
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[1040px] flex-col gap-8 px-3.5 py-6 sm:px-8 sm:py-10">
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-baseline gap-4">
-          <h1 className="retro text-lg text-ink sm:text-xl">BEAT.BIT</h1>
-          <span className="retro hidden text-[10px] text-ink-dim sm:inline">DAY 001 / 100</span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline gap-4">
+            <h1 className="retro text-lg text-ink sm:text-xl">BEAT.BIT</h1>
+            <span className="retro hidden text-[10px] text-ink-dim sm:inline">DAY 001 / 100</span>
+          </div>
+          <p className="text-sm text-ink-dim">A tiny pixel world that performs the beat you make.</p>
         </div>
         <Badge variant={status.variant} className="text-[10px]">
           {status.label}
@@ -43,6 +53,8 @@ export default function App() {
             </p>
             <CityScene
               playing={seq.playing}
+              mood={grooveById(seq.grooveId).mood}
+              onRemix={seq.onRemix}
               onStep={seq.onStep}
               onTransport={seq.onTransport}
               onFrame={seq.onFrame}
@@ -67,10 +79,17 @@ export default function App() {
             <TransportControls
               playing={seq.playing}
               bpm={seq.bpm}
+              grooveId={seq.grooveId}
+              edited={seq.edited}
+              canUndo={seq.canUndo}
+              rollKey={roll.key}
+              rollSize={roll.size}
               onPlay={seq.play}
               onStop={seq.stop}
               onBpm={seq.setBpm}
               onGroove={seq.loadGroove}
+              onRemix={seq.remix}
+              onUndo={seq.undo}
               onClear={seq.clear}
             />
           </CardContent>
@@ -83,6 +102,7 @@ export default function App() {
               onToggle={seq.toggle}
               onStep={seq.onStep}
               onTransport={seq.onTransport}
+              onRemix={seq.onRemix}
             />
           </CardContent>
         </Card>
@@ -92,9 +112,12 @@ export default function App() {
             <Kbd>←</Kbd>
             <Kbd>→</Kbd>
             <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> move ·<Kbd>SPACE</Kbd> toggle ·<Kbd>TAB</Kbd> controls
+            <Kbd>↓</Kbd> move ·<Kbd>SPACE</Kbd> toggle ·<Kbd>TAB</Kbd> controls · REMIX rolls a
+            variation
           </span>
-          <span className="sm:hidden">Tap a square to add a sound. Press Play to hear it.</span>
+          <span className="sm:hidden">
+            Press PLAY. Tap squares to change the beat, or REMIX to roll a variation.
+          </span>
         </p>
       </main>
 

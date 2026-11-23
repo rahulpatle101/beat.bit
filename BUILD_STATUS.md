@@ -148,6 +148,20 @@
 | M4 | Info | The melody has no city visual yet (tower light planned for V2.3b) |
 | M5 | Info | The lead releases 40 ms past the next step's onset (by design, a short overlap). It's monophonic in practice. |
 
+
+### V2.3b — Music & game reset: planning + audio previews (2026-11-23, ⏳ awaiting review)
+
+**Scope:** planning only. **No app changes.** The production bundle is unchanged (344.80 KB) and the dev preview code isn't in `dist/`.
+
+| Deliverable | Where | Verification |
+|---|---|---|
+| 4 composed kits (NEON DRIVE, PIXEL QUEST, NIGHT SHIFT, BOSS RUSH) as score data | `src/dev/music/kits.ts` | [T] Music-theory lint, 8 tests: key, semitone approach notes (across barlines and sections), range, structure. It caught 4 composition slips while writing (all fixed). |
+| Prototype instruments (velocity drums, open hat/crash/toms, 4 bass, 4 chord, 5 lead presets, delay + reverb sends) | `src/dev/music/synths.ts` | All `BaseAudioContext`, fixed stop times |
+| 4 audio previews (WAV + MP3, ~26–34 s, intro → main → variation → drop → end) | Scratchpad (paths in the review message) | [B] Offline render through `createMasterChain`: 0 clipped samples (peaks 0.78–0.93), tails −93 to −106 dB, stem balance within targets. Section loudness in MUSIC_DIRECTION §4. |
+| MUSIC_DIRECTION.md · GAME_DESIGN.md · V2_ROADMAP Part 5 (V3.0 Playable Slice + acceptance criteria) | repo root | — |
+
+**Open:** your listening review of the four kits (the key gate). Drops are only 0.5–1.3 dB louder than main sections (the lift is arrangement-driven; a sidechain pump is the proposed fix). Decisions are listed in V2_ROADMAP Part 5.
+
 ## How findings were verified
 
 | Tag | Meaning |

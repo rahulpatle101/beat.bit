@@ -216,3 +216,59 @@ V2.1 Fixes + Reactive World ──► V2.2 Grooves ──► V2.3 Share/Remix (+
 5. **Fix-first:** do the D1–D4 and D8 fixes at the start of V2.1 (recommended) vs. as a separate hotfix commit before any V2 work.
 6. **Analytics:** none for now (recommended), or privacy-friendly aggregate analytics to measure the MARKET_RESEARCH metrics.
 7. **Mood per groove** (sky tint, sign text): yes (recommended) or no.
+
+
+---
+
+## Part 5 — Music & Game Reset (2026-11-23, ⏳ PROPOSED)
+
+**Trigger:** V2.3a works, but the product feels musically underwhelming. **New vision:** *a playful music arcade where people create original funky tunes, perform them, earn rewards, and unlock reactive pixel worlds.*
+**Specs:** [MUSIC_DIRECTION.md](MUSIC_DIRECTION.md) · [GAME_DESIGN.md](GAME_DESIGN.md).
+
+### Status of earlier phases
+| Phase | Status |
+|---|---|
+| V2.1 Signal City Live · V2.2 Grooves + Remix Dice · V2.3a BIT LEAD + generator | ✅ Shipped. **Preserved.** |
+| V2.3b Pitch Grid editor · V2.3c Remix Dice v2 · sharing · V2.4 polish | ⏸ **Paused** by this reset (not cancelled) |
+| Four composed kits + objective QA + audio previews | ✅ Done as **dev-only previews** (`src/dev/music/`, `dev/music-preview.html`) |
+
+### Phase D: smallest playable milestone, "V3.0 PLAYABLE SLICE" (~3 focused days)
+**Goal:** prove both (1) *genuinely enjoyable music* and (2) *one satisfying game challenge*, with the least new surface.
+
+| # | Build | Explicitly not in the slice |
+|---|---|---|
+| S1 | **Kit engine:** promote the prototype voices (bass, chords, leads, open hat/crash/toms, velocity, FX sends, safety limiter) into `src/audio`, with tests. Bar-aware scheduling (bar index → the kit's bass/chords/lead per bar). | Pitch Grid editor, melody editing |
+| S2 | **Two kits in the app:** NEON DRIVE (default) and PIXEL QUEST, with intro → main → variation → drop → end and a looping main in Sandbox. The drum grid edits the kit's drum layer. Remix Dice (drums) keeps working. The V2.2 groove picker becomes the **kit picker**; NIGHT SHIFT and BOSS RUSH show as locked. | Mutation levels (Phase B), NIGHT SHIFT / BOSS RUSH playable, new worlds |
+| S3 | **ARCADE: WAKE THE CITY** (2 pads, ~30 s): cues on the grid one bar ahead, audio-clock judging, PERFECT/GREAT/GOOD/MISS/STRAY, combo, district lighting, results card (score, accuracy, stars, 8bitcn XP Bar) | Funk Master, Boss Battle, daily mutation, ghost runs |
+| S4 | **Progression-lite:** XP + rank badge + "NEON DRIVE unlocked" stored in `localStorage` (versioned). Assist mode toggle. A simple 10-tap calibration. | Accounts, leaderboard, cloud saves |
+| S5 | **FTUE:** PLAY → challenge-as-tutorial → results → Sandbox | Full settings screen |
+
+**Preserved:** V2.1 performers (they react to the player's hits in Arcade and to drum steps in Sandbox), V2.2 Remix Dice + Undo, V2.3a BIT LEAD (as the `pulse25` preset), keyboard and reduced-motion behavior, 8bitcn foundation.
+
+### Acceptance criteria: V3.0 Playable Slice
+**Music**
+- [ ] NEON DRIVE and PIXEL QUEST in the app match the approved previews. Same score data. Offline render of the app path within ±0.5 dB per section of the preview.
+- [ ] No clipping: peak < 0.95 on every section, plus 200 seeded drum-remix variations rendered offline stay < 0.98. Tail < −80 dB after Stop. 21× rapid Play/Stop leaves silence (V2.3a harness).
+- [ ] The composition lint passes on all kit data (key, approach notes, range).
+- [ ] **You approve both kits by ear** in the app.
+
+**Sandbox (regression)**
+- [ ] All V2.1/V2.2/V2.3a unit tests, the performer probe, and the regression suite pass. Drum-grid edits change the kit's drum layer on the next pass. Undo works.
+
+**Arcade: Wake the City**
+- [ ] Judge function unit tests: offsets 0/±30/±60/±100/±150 ms → PERFECT/PERFECT/GREAT/GOOD/MISS at Normal windows. Assist doubles the windows.
+- [ ] Scripted Chrome run: presses injected at the cue times (±5 ms) → ≥ 95% PERFECT, ★★★.
+- [ ] **Anti-spam:** a scripted mash (8 random presses per beat on both pads) → accuracy < 25%, no star, XP 0. Repeated presses < 40 ms apart count once.
+- [ ] Combo, district lighting, and the performer reacting to each player hit are visible. Misses make no error sound.
+- [ ] Results card shows score, accuracy, stars, and XP (8bitcn XP Bar). XP and unlock persist across reload. A replay below the best star tier gives 20% XP.
+- [ ] Keyboard (`F`/`J`) and touch pads (≥ 64 px) both work. Focus is visible. The challenge can be started, paused (Esc), and retried by keyboard.
+- [ ] Reduced motion: no travelling pops or shake, instant district lights.
+- [ ] Screen reader: objectives and results announced, no per-note announcements. An optional count-in is available.
+- [ ] **FTUE:** a scripted first visit produces sound within 5 s of pressing PLAY, and the first hinted cue can be hit within 15 s of page load.
+
+### Decisions needed before the slice
+1. **Vision change:** adopt "music arcade" as the product positioning (it supersedes "a tiny pixel world that performs the beat you make" as the headline, while the world stays central)?
+2. **Kits replace V2.2 grooves** in the picker (the V2.2 grooves are retired from the UI, kept in code for tests)? Recommended: yes.
+3. **Slice kits:** NEON DRIVE + PIXEL QUEST (recommended), or NEON DRIVE only (faster)?
+4. **V2.3a temporary melody controls:** remove in the slice (the kit lead replaces them)? Recommended: yes.
+5. **Arcade input default:** 2 pads `F` / `J`, with on-screen pads on touch (recommended)?

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BEAT.BIT — music direction previews (dev only)</title>
+  </head>
+  <body>
+    <p>Dev-only renderer for MUSIC_DIRECTION.md previews. <code>await music.analyseAll()</code>, <code>await music.kitWav(0)</code>.</p>
+    <script type="module">
+      import { analyseAll, kitWav } from '/src/dev/music/render.ts'
+      window.music = { analyseAll, kitWav }
+      document.title = 'ready'
+    </script>
+  </body>
+</html>

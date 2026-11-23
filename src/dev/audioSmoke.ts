@@ -13,6 +13,7 @@ import { Scheduler, stepDuration } from '@/audio/scheduler'
 import { VOICES, createNoiseBuffer } from '@/audio/voices'
 import { PROFILES, generateMelody, midiFor } from '@/data/melody'
 import { GROOVES, TRACK_IDS, emptyPattern } from '@/data/patterns'
+import { encodeWav, toBase64 } from './wav'
 
 function stats(buf: AudioBuffer) {
   const d = buf.getChannelData(0)
@@ -51,36 +52,6 @@ export async function offlineRender() {
   return results
 }
 
-/** 16-bit PCM WAV (review artifacts only; the product export comes later). */
-function encodeWav(buf: AudioBuffer): ArrayBuffer {
-  const ch = buf.numberOfChannels
-  const n = buf.length
-  const out = new ArrayBuffer(44 + n * ch * 2)
-  const v = new DataView(out)
-  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)))
-  str(0, 'RIFF')
-  v.setUint32(4, 36 + n * ch * 2, true)
-  str(8, 'WAVEfmt ')
-  v.setUint32(16, 16, true)
-  v.setUint16(20, 1, true)
-  v.setUint16(22, ch, true)
-  v.setUint32(24, buf.sampleRate, true)
-  v.setUint32(28, buf.sampleRate * ch * 2, true)
-  v.setUint16(32, ch * 2, true)
-  v.setUint16(34, 16, true)
-  str(36, 'data')
-  v.setUint32(40, n * ch * 2, true)
-  const data = Array.from({ length: ch }, (_, c) => buf.getChannelData(c))
-  let o = 44
-  for (let i = 0; i < n; i++)
-    for (let c = 0; c < ch; c++) {
-      const s = Math.max(-1, Math.min(1, data[c][i]))
-      v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true)
-      o += 2
-    }
-  return out
-}
-
 /** Render `bars` bars of a groove with its curated melody → base64 WAV (review listening). */
 export async function renderGrooveWav(index: number, bars = 4, withMelody = true) {
   const g = GROOVES[index]
@@ -98,10 +69,7 @@ export async function renderGrooveWav(index: number, bars = 4, withMelody = true
       if (withMelody && d !== null) playLead(ctx, out, t, midiFor(g.id, d), step)
     }
   const wav = encodeWav(await ctx.startRendering())
-  let bin = ''
-  const bytes = new Uint8Array(wav)
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-  return { name: g.name, seed: PROFILES[g.id].seed, base64: btoa(bin) }
+  return { name: g.name, seed: PROFILES[g.id].seed, base64: toBase64(wav) }
 }
 
 export async function liveMelody() {
@@ -113,6 +81,7 @@ export async function liveMelody() {
   proto.createDynamicsCompressor = function (this: AudioContext) {
     const n = orig.call(this)
     captured = n
+    // oxlint-disable-next-line no-this-alias -- intentional: capture the engine's AudioContext for the tap
     capturedCtx = this
     return n
   }

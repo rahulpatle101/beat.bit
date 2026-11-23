@@ -1,0 +1,20 @@
+/*
+ * BEAT.BIT patch: the upstream file @imports Press Start 2P from Google Fonts.
+ * The font is self-hosted via @fontsource/press-start-2p (imported in src/main.tsx),
+ * so there are no third-party requests at runtime.
+ */
+
+.retro {
+  font-family:
+    "Press Start 2P",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  line-height: 1.5;
+  letter-spacing: 0.5px;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}

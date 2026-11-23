@@ -1,0 +1,230 @@
+/* Sequencer grid (DESIGN.md §4, §8.1). The layout responds to its container, not the viewport. */
+
+.seq-wrap {
+  container-type: inline-size;
+}
+
+.seq {
+  --gap: 4px;
+  --gg: 4px; /* extra spacer track between beat groups */
+  --label-w: 128px;
+  --cell: clamp(28px, calc((100cqw - var(--label-w) - 20 * var(--gap) - 3 * var(--gg)) / 16), 48px);
+
+  display: grid;
+  grid-template-columns:
+    var(--label-w)
+    var(--cell) var(--cell) var(--cell) var(--cell) var(--gg)
+    var(--cell) var(--cell) var(--cell) var(--cell) var(--gg)
+    var(--cell) var(--cell) var(--cell) var(--cell) var(--gg)
+    var(--cell) var(--cell) var(--cell) var(--cell);
+  grid-template-rows: repeat(4, var(--cell)) auto;
+  gap: 10px var(--gap);
+  justify-content: center;
+}
+
+/* ---------- Labels ---------- */
+
+.seq-label {
+  grid-row: var(--rd);
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.seq-label--b,
+.seq-block-label {
+  display: none;
+}
+.seq-label-glyph {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.seq-label-name {
+  font-size: 10px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.seq-beat {
+  grid-row: 5;
+  grid-column: var(--cd);
+  font-size: 10px;
+  color: var(--ink-dim);
+  padding-left: 2px;
+}
+
+/* ---------- Step cell ---------- */
+
+.seq-cell {
+  --c: var(--ink);
+  --bevel-hi: rgb(255 255 255 / 0.05);
+  --bevel-lo: rgb(0 0 0 / 0.38);
+
+  grid-row: var(--rd);
+  grid-column: var(--cd);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--cell);
+  color: transparent;
+  box-shadow:
+    inset 4px 4px 0 var(--bevel-hi),
+    inset -4px -4px 0 var(--bevel-lo);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.seq-cell[data-group='1'] {
+  background: var(--cell-alt);
+}
+.seq-cell[data-track='kick'] { --c: var(--kick); }
+.seq-cell[data-track='snare'] { --c: var(--snare); }
+.seq-cell[data-track='hat'] { --c: var(--hat); }
+.seq-cell[data-track='clap'] { --c: var(--clap); }
+
+.seq-cell-glyph {
+  width: 38%;
+  height: 38%;
+  pointer-events: none;
+}
+
+/* Off + hover: border brightens; a faint glyph previews what you'll place. */
+@media (hover: hover) {
+  .seq-cell:hover {
+    box-shadow:
+      inset 0 0 0 2px var(--ink-dim),
+      inset 4px 4px 0 var(--bevel-hi),
+      inset -4px -4px 0 var(--bevel-lo);
+    color: color-mix(in srgb, var(--c) 35%, transparent);
+  }
+  .seq-cell[aria-pressed='true']:hover {
+    filter: brightness(1.1);
+    color: var(--void);
+  }
+}
+
+/* On: track color fill with the glyph knocked out (state is never color-only). */
+.seq-cell[aria-pressed='true'] {
+  --bevel-hi: rgb(255 255 255 / 0.28);
+  --bevel-lo: rgb(0 0 0 / 0.28);
+  background: var(--c);
+  color: var(--void);
+}
+
+/* Pressed: the bevel inverts and the cell sinks 2px. */
+.seq-cell:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel-lo),
+    inset -4px -4px 0 var(--bevel-hi);
+}
+
+/* Focus: square ink outline, distinct from the playhead wash. */
+.seq-cell:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  z-index: 2;
+}
+
+/* Playhead column: a wash on every cell, plus tick marks above the first track and below the last. */
+.seq-cell.is-current::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(230 225 211 / 0.16);
+  pointer-events: none;
+}
+.seq-cell.is-current[data-t='0']::before,
+.seq-cell.is-current[data-t='3']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--ink);
+  pointer-events: none;
+}
+.seq-cell.is-current[data-t='0']::before { top: -7px; }
+.seq-cell.is-current[data-t='3']::before { bottom: -7px; }
+
+/* Sounding: one bright frame plus a glow that decays (stepped) within one step. */
+.seq-cell.is-current[aria-pressed='true'] {
+  filter: brightness(1.12);
+}
+.seq-cell.is-hit[aria-pressed='true'] {
+  z-index: 1;
+  animation: seq-hit var(--step-ms, 150ms) steps(3, end);
+}
+@keyframes seq-hit {
+  from {
+    filter: brightness(1.28);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--c) 80%, transparent),
+      0 0 14px 2px color-mix(in srgb, var(--c) 55%, transparent);
+  }
+  to {
+    filter: brightness(1.12);
+    box-shadow:
+      0 0 0 0 var(--c),
+      0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seq-cell.is-hit[aria-pressed='true'] {
+    animation: none;
+  }
+  .seq-cell:active {
+    transform: none;
+  }
+}
+
+/* ---------- Mobile: two blocks of 8 steps (DESIGN.md §4.3) ---------- */
+
+@container (max-width: 599px) {
+  .seq {
+    --label-w: 20px;
+    --gg: 2px;
+    --cell: clamp(24px, calc((100cqw - var(--label-w) - 9 * var(--gap) - var(--gg)) / 8), 56px);
+    grid-template-columns:
+      var(--label-w)
+      var(--cell) var(--cell) var(--cell) var(--cell) var(--gg)
+      var(--cell) var(--cell) var(--cell) var(--cell);
+    grid-template-rows: auto repeat(4, var(--cell)) auto repeat(4, var(--cell));
+    row-gap: 8px;
+  }
+  .seq-cell {
+    grid-row: var(--rm);
+    grid-column: var(--cm);
+  }
+  .seq-label {
+    grid-row: var(--rm);
+  }
+  .seq-label--b {
+    display: flex;
+  }
+  .seq-label-name,
+  .seq-beat {
+    display: none;
+  }
+  .seq-block-label {
+    display: block;
+    grid-column: 1 / -1;
+    font-size: 10px;
+    color: var(--ink-dim);
+    padding-top: 4px;
+  }
+  .seq-block-label--a { grid-row: 1; }
+  .seq-block-label--b { grid-row: 6; padding-top: 12px; }
+  /* Ticks: first/last track of each block */
+  .seq-cell.is-current[data-t='0']::before { top: -6px; }
+  .seq-cell.is-current[data-t='3']::before { bottom: -6px; }
+}

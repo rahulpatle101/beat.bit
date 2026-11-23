@@ -1,0 +1,359 @@
+# BEAT.BIT — Experience Design Specification
+
+**Day 001 / 100 Days of Digital Craft** · Stage 3 of 4
+**Status:** ✅ APPROVED on 2026-11-23. All D1–D7 accepted as recommended. Step cells must carry the 8-bit style wherever it can be themed.
+**Builds on:** [RESEARCH.md](RESEARCH.md) · [ART_DIRECTION.md](ART_DIRECTION.md) (✅ Signal City)
+
+---
+
+## 1. Experience goals
+
+| # | Goal | Measure |
+|---|---|---|
+| G1 | **Playable in seconds** | A first-time visitor hears the groove and sees the city react **with one action** (Play). |
+| G2 | **Tactile, legible instrument** | Every step's state (off/on/playing/focused) is distinguishable at a glance and without color. |
+| G3 | **Music you can see** | Each instrument visibly drives its own part of the scene, in time with the audio. |
+| G4 | **Robust transport** | No duplicate loops, drift, or stuck audio after any sequence of Play/Stop/tempo/edit actions. |
+| G5 | **Inclusive** | Fully operable by keyboard. Screen readers get meaningful names and states, motion can be reduced, and it's usable at 360px wide. |
+
+**Primary user:** a curious visitor from a social post, on a laptop or phone, with no music training and about 30 seconds of attention.
+**Secondary user:** a designer or developer evaluating the craft. They'll try the keyboard, resize the window, and spam Play.
+
+## 2. Core user journey
+
+1. **Land.** The city is dark and the starter groove is already in the grid. The Play button is the most prominent control. A one-line hint reads "Press Play, then tap the grid to change the beat."
+2. **Play** (first user gesture). The AudioContext is created or resumed, the transport starts, and the city wakes up.
+   - If audio is blocked, an inline `Alert` appears (§7.4) and the visuals still run so the experience isn't dead.
+3. **Edit.** Tap steps while it plays. Changes land on the next pass.
+4. **Explore.** Drag the BPM, Clear to start from silence, reload the Groove.
+5. **Stop.** Silence comes at once, and the city goes dark with the idle blink.
+
+## 3. Information architecture
+
+```
+App
+├── Header           BEAT.BIT wordmark · "DAY 001 / 100" · audio status Badge
+├── Scene            Pixel city canvas (decorative, aria-hidden) + text status for AT
+├── Transport        Play/Stop · BPM slider + readout · Groove · Clear
+├── Sequencer        4 tracks × 16 steps (+ track labels with glyphs)
+├── Hint line        Context-sensitive one-line help (+ Kbd hints on desktop)
+└── Footer           Credits, 8bitcn mention, source link
+```
+
+There is only one view: no routes, no modals, no settings panel.
+
+## 4. Layout
+
+### 4.1 Desktop (≥ 1024px), max content width 1040px, centered
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ BEAT.BIT                         DAY 001/100   [AUDIO ● ON]  │  header
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│                  ░ SCENE  160×50 @ 6× = 960×300 ░            │  Card
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│ [ ▶ PLAY ]   BPM ═══════●══════  104    [ GROOVE ] [ CLEAR ] │  Card: transport
+├──────────────────────────────────────────────────────────────┤
+│ ▮ KICK  │■□□□│□□■□│■□□□│□□□■│                                │
+│ ▚ SNARE │□□□□│■□□□│□□□□│■□□□│                                │  Card: sequencer
+│ ▴ HAT   │■□■□│■□■□│■□■□│■□■■│                                │
+│ ✚ CLAP  │□□□□│□□□□│□□□□│■□□■│                                │
+│           1    5    9    13     ← beat numbers                 │
+├──────────────────────────────────────────────────────────────┤
+│ ← → ↑ ↓ move · SPACE toggle · TAB to controls                │  hint
+└──────────────────────────────────────────────────────────────┘
+```
+
+- Step cells are **48×48px** with 4px gaps and an 8px extra gap between beat groups.
+- The track-label column is 120px wide. Beat numbers 1/5/9/13 sit under each group.
+
+### 4.2 Tablet (640–1023px)
+
+The same structure. Cells shrink fluidly to `min(48px, (container − label) / 16 − gap)`, which is about 36px at 768px. Track labels shrink to the glyph plus a short name. The scene scales to the largest integer that fits (4× = 640px at 768).
+
+### 4.3 Mobile (< 640px): split bars
+
+16 columns don't fit at 360px with usable touch targets, which would be about 18px each. **The grid wraps into two stacked 8-step blocks.** Each block has all 4 tracks, so steps stay vertically aligned across instruments:
+
+```
+┌─────────────────────────────┐
+│ BEAT.BIT          [AUDIO ●] │
+│ ░░ SCENE 160×50 @2× ░░░░░░░ │  320×100
+│ [ ▶ PLAY ]          [GROOVE]│
+│ BPM ══════●═══ 104  [CLEAR] │
+│ STEPS 1–8                   │
+│ ▮ ■□□□ □□■□                 │
+│ ▚ □□□□ ■□□□                 │
+│ ▴ ■□■□ ■□■□                 │
+│ ✚ □□□□ □□□□                 │
+│ STEPS 9–16                  │
+│ ▮ ■□□□ □□□■                 │
+│ ▚ □□□□ ■□□□                 │
+│ ▴ ■□■□ ■□■■                 │
+│ ✚ □□□□ ■□□■                 │
+└─────────────────────────────┘
+```
+
+- **Cells are ≥ 36×36px** at 360px wide. That's above the WCAG 2.5.8 minimum (24px). The target is 40px at 390px+.
+- Track labels become **glyph only** (24px column), and the accessible name still carries the full instrument name.
+- The playhead sweeps block 1, then block 2, so it reads as two bars.
+- **No horizontal overflow at 320px or wider.** Below 340px, cells may drop to 32px.
+- The transport stays above the grid, so Play is reachable without scrolling on a 667px-tall screen **[A: verify]**.
+
+### 4.4 Scene scaling
+
+The scale is `floor(containerWidth / 160)`, clamped to 2–6. The canvas is centered, and the remaining letterbox uses `--void`. A canvas is never rendered at a non-integer scale.
+
+## 5. The sequencer
+
+### 5.1 Data model (kept separate from playback and rendering)
+
+```ts
+type TrackId = 'kick' | 'snare' | 'hat' | 'clap';
+type Pattern = Record<TrackId, boolean[]>;   // each length 16
+interface SequencerState { pattern: Pattern; bpm: number; }  // bpm 60–180, default 104
+```
+
+- The pattern lives in React state (reducer: `toggle`, `clear`, `loadGroove`, `setBpm`).
+- The audio scheduler reads the **latest pattern through a ref**, so edits never restart the transport.
+- The **current step is not React state.** The render loop writes `data-step` on the grid root, and CSS styles the active column. This avoids re-rendering 64 cells 7+ times a second.
+
+### 5.2 Starter groove: "SIGNAL" at 104 BPM
+
+| Track | Steps (1-indexed) | Shape |
+|---|---|---|
+| Kick | 1, 7, 9, 14 | Syncopated, head-nod |
+| Snare | 5, 13 | Backbeat |
+| Hi-hat | 1, 3, 5, 7, 9, 11, 13, 15, 16 | 8ths with a pickup |
+| Clap | 13, 16 | Layered backbeat + turnaround |
+
+It's loaded on first visit and by the **Groove** button. Final tuning happens by ear during the build.
+
+### 5.3 Timing
+
+- One step is a 16th note: `stepDuration = 60 / bpm / 4` s (≈144 ms at 104 BPM).
+- **Lookahead scheduler:** it wakes every 25 ms and schedules every step whose time falls within the next 100 ms on the audio clock.
+- **Note queue:** each scheduled step pushes `{ step, time, voices[] }`. A `requestAnimationFrame` loop pops entries whose `time <= ctx.currentTime − outputLatency` and drives the playhead and the scene. Visuals are therefore derived from scheduled audio events, not from a separate animation.
+- **A tempo change** takes effect from the next step scheduled. There's no restart or jump.
+- **Edits close to the playhead:** a toggle made less than 100 ms before its step may already have been scheduled, so it lands on the next loop. This is documented as expected behavior.
+
+## 6. Controls
+
+| Control | 8bitcn component | Behavior |
+|---|---|---|
+| **Play / Stop** | `Button` (default variant, lg) | A single toggle. Its visible label switches between `▶ PLAY` and `■ STOP`, and its accessible name matches. It's idempotent: repeated clicks never stack loops. |
+| **BPM** | `Slider` (patched to forward `aria-label`/`aria-valuetext` to the Thumb) + numeric readout | Range 60–180, step 1. Arrows ±1, PageUp/PageDown ±10, Home/End min/max. `aria-valuetext="104 beats per minute"`. The readout is a Press Start 2P 3-digit display. |
+| **Groove** | `Button` (outline) | Loads "SIGNAL" and sets BPM to 104. It works during playback. |
+| **Clear** | `Button` (outline) | Empties all steps. The transport keeps running, so the playhead sweeps a silent, dark city and invites rebuilding. (Stretch: the blackout animation.) |
+| **Audio status** | `Badge` | `AUDIO OFF` (before the first gesture) · `AUDIO ON` · `AUDIO BLOCKED` |
+| **Audio notice** | `Alert` | Shown only when blocked (§7.4). |
+| **Shortcut hints** | `Kbd` | In the hint line on desktop only. |
+| **Framing** | `Card` | The scene, transport, and sequencer each sit in a Card. |
+| **Step cells** | Custom `<button>`, styled to match 8bitcn | See §5 / §8. This is a performance and state-control decision, documented in the README. |
+
+No confirmation on Clear: it's one click to undo via Groove, and a confirmation would break the instrument feel. (Stretch: an undo toast.)
+
+## 7. Interaction specification
+
+### 7.1 Step toggle
+- **Pointer/touch:** it toggles on `pointerdown` for an instant feel. A second tap toggles it back.
+- **Keyboard:** Space or Enter toggles the focused step.
+- **Stopped:** turning a step **on** auditions that instrument once (pressing makes a sound, which teaches the rows). Turning it off is silent.
+- **Playing:** no audition, because the step is heard on its next pass.
+- The visual flip happens in the same frame, playing or stopped.
+
+### 7.2 Transport
+| From → action | Result |
+|---|---|
+| Stopped → Play | Create/resume the AudioContext, then start the scheduler at step 1, `startTime = ctx.currentTime + 0.05`. |
+| Playing → Stop | Clear the scheduler timer, stop or disconnect every voice scheduled but not yet played, clear the note queue, reset the playhead, and set the scene to idle. |
+| Play ×N rapidly | A guard flag means only one scheduler can exist. Each Stop fully tears it down first. |
+| Tab hidden while playing | **Auto-stop** and announce "Stopped: tab hidden." Background timer throttling would otherwise cause stutter. **[Decision §13]** |
+| Unmount / HMR | Dispose the scheduler, close the AudioContext, cancel rAF. |
+
+### 7.3 Tempo
+Dragging updates the readout live and the audio from the next step. Screen-reader announcements are debounced to 500 ms.
+
+### 7.4 Audio activation and blocked state
+| State | Trigger | UI |
+|---|---|---|
+| `locked` | The initial load | Badge: `AUDIO OFF`. Hint: "Press Play to start sound." |
+| `running` | `ctx.state === 'running'` after Play | Badge: `AUDIO ON` |
+| `blocked` | After the gesture, `resume()` rejects or state is still not running after 300 ms | Badge: `AUDIO BLOCKED`. `Alert`: "Sound is blocked. Tap Play again. On iPhone, check the silent switch." The visuals keep playing. |
+| `interrupted` (iOS) | `statechange` to `interrupted`/`suspended` while playing | Stop the transport and show the `blocked` notice. |
+
+## 8. Component states
+
+### 8.1 Step cell
+
+| State | Visual | Non-color cue |
+|---|---|---|
+| Off | `--cell` / `--cell-alt` (beat group), 1-unit bevel | Empty |
+| Off + hover | Border brightens to `--ink-dim` | Border |
+| On | Fill in the track color, glyph knocked out in `--void` | **Glyph visible** |
+| On + hover | Fill lightened ~8% | — |
+| Pressed | Translate 2px down-right (bevel inverts) for 80 ms | Movement |
+| Focus-visible | 2px `--ink` outline, 2px offset, **square** corners | Outline (distinct from the playhead) |
+| Playhead column (off cells) | `--ink` at 12% wash + 2px tick marks above and below the column | Ticks |
+| Playhead column + on (**sounding**) | 1-frame brighten + 2-unit glow in the track color, decaying within one step | Brightness pulse |
+| Reduced motion, sounding | Brighten only, with no glow decay animation | — |
+
+### 8.2 Play button
+| State | Label | Visual |
+|---|---|---|
+| Stopped | `▶ PLAY` | `--ink` fill, `--void` text (highest emphasis on the page) |
+| Playing | `■ STOP` | Inverted: `--panel` fill, `--ink` border/text. A small beat-synced pip blinks on each quarter note (stops with reduced motion). |
+| Focus | 8bitcn focus + `--ink` outline | — |
+| Pressed | 8bitcn's built-in 4px translate | — |
+
+### 8.3 Scene states
+`idle` (dark city, blinking window, "PRESS PLAY" in pixel text) · `playing` (layer responses per ART_DIRECTION) · `cleared-playing` (dark city, only the playhead lamps move) · `blocked` (the visuals still run, and the scene isn't greyed out).
+
+## 9. Keyboard interaction
+
+### 9.1 Tab order
+Play → BPM slider → Groove → Clear → **Sequencer (one Tab stop)** → footer link.
+
+### 9.2 Within the sequencer (roving tabindex)
+| Key | Action |
+|---|---|
+| ← / → | Previous/next step. Stops at the edges, no wrap (APG grid convention). |
+| ↑ / ↓ | Same step, previous/next track |
+| Home / End | First/last step in the row |
+| Ctrl/⌘ + Home / End | First step of the first track / last step of the last track |
+| Space / Enter | Toggle the step |
+| Tab / Shift+Tab | Leave the grid. On return, focus restores to the last focused cell. |
+
+On mobile's split layout the **logical** navigation is unchanged: → from step 8 goes to step 9 in the lower block.
+
+### 9.3 Global shortcuts (stretch, post-MVP)
+`Shift+Space` play/stop · `[` / `]` BPM ±1. They're disabled while focus is in the slider. Plain Space is deliberately **not** global, because it toggles the focused cell or button.
+
+## 10. Accessibility
+
+- **Grid semantics:** `role="grid"` with `aria-label="Drum pattern, 4 tracks by 16 steps"`. Each track is a `role="row"`. The label cell is `role="rowheader"` and the step cells are `role="gridcell"` wrapping a `<button aria-pressed>`. **[A]** The alternative of `<button>` inside `role="group"` rows is simpler. I'll validate with VoiceOver and pick whichever announces more cleanly, then note which in the README.
+- **Step names:** `aria-label="Kick, step 5"` + `aria-pressed`. Beat group context is added on steps 1/5/9/13 ("Kick, step 5, beat 2").
+- **Live region** (`aria-live="polite"`, visually hidden) announces only discrete events: "Playing at 104 BPM", "Stopped", "Pattern cleared", "Groove loaded", "Sound blocked…". **There are no per-step announcements.**
+- **Scene:** the canvas is `aria-hidden="true"`. The live region and grid carry all the information.
+- **Contrast:** text ≥ 4.5:1, UI boundaries and the focus ring ≥ 3:1 against neighbors. Each track color must reach ≥ 3:1 against `--cell` **[A: verify all tokens with a checker; adjust hex if needed]**.
+- **Color independence:** the track glyph appears on every "on" cell and every label.
+- **Reduced motion** (`prefers-reduced-motion: reduce`): per the ART_DIRECTION table. The playhead and state changes stay. Movement, flicker, twinkle, glow decay, and the idle blink are removed.
+- **Zoom:** usable at 200% browser zoom on desktop (the layout falls through to the tablet/mobile arrangement).
+- **Touch:** `touch-action: manipulation` on cells (no double-tap zoom delay). Cells never act as scroll-blocking drag surfaces.
+
+## 11. Scene specification (Signal City)
+
+A canvas of **160×50 logical pixels**, drawn with Canvas 2D at native resolution and CSS-scaled.
+
+| Element | Count / size | Driven by |
+|---|---|---|
+| Sky | Full background, 2-tone ordered dither | Static |
+| Stars | ~12 single pixels | Hi-hat: one random star twinkles for 2 frames |
+| Skyline | 7–9 buildings, heights 14–38px, one tallest tower | Kick: whole skyline y+1 for 2 frames |
+| Windows | 2×2 px on a 4px grid inside the buildings (~60 total) | Snare: 3–6 random windows light, fading over ~3 steps |
+| Antenna | 1 light on the tallest tower | Hi-hat: blinks teal |
+| Neon sign | ~16×5 px glyph on the tower ("BIT") | Clap: 2-frame flicker, then on for 1 step |
+| Street line | 1px across the bottom | Kick: coral flash |
+| Street lamps | 16 lamps evenly spaced | Playhead: the current lamp is lit `--ink` |
+| Idle cursor | 1 window | Blinks at 1 Hz when stopped |
+
+- Rendering: one draw function `draw(state, now)` per rAF. The decay state is a tiny array of `{ element, startTime }`. Scene-element frames are quantized to ~12 fps for the pixel feel, but **onsets render on the very next frame**.
+- **Stretch (warm-up/blackout):** consecutive unchanged loops (up to 4) extend the window fade length. Any edit resets the count. On Clear, windows turn off column by column over 4 frames.
+
+## 12. Implementation plan (for reference; it begins after approval)
+
+### 12.1 Dependencies (each needs your approval at install time)
+| Package | Why |
+|---|---|
+| `vite`, `react`, `react-dom`, `typescript`, `@vitejs/plugin-react` | The app shell |
+| `tailwindcss`, `@tailwindcss/vite` | Required by shadcn/8bitcn |
+| `shadcn` CLI (run with `pnpm dlx`, not installed) | Adds the 8bitcn components |
+| Pulled in by shadcn: `radix-ui`/`@radix-ui/*`, `class-variance-authority`, `clsx`, `tailwind-merge` | 8bitcn component dependencies |
+| `@fontsource/press-start-2p`, `@fontsource/ibm-plex-sans` | Self-hosted fonts **[A: package names to verify]** |
+| `vitest` (dev, optional) | Unit tests for the pattern reducer and scheduler math |
+
+There is no Tone.js unless the fallback is triggered, and if so I'll ask first.
+
+### 12.2 Structure
+```
+src/
+  audio/engine.ts        AudioContext lifecycle, master bus, unlock/blocked state
+  audio/scheduler.ts     Lookahead scheduler + note queue (no React)
+  audio/voices.ts        kick / snare / hat / clap synthesis
+  data/patterns.ts       Types, empty pattern, SIGNAL groove
+  hooks/useSequencer.ts  Reducer + wiring between state, scheduler, and the rAF loop
+  components/SequencerGrid.tsx   Grid, roving focus, StepCell
+  components/TransportControls.tsx
+  components/CityScene.tsx       Canvas + draw()
+  components/ui/8bit/*           8bitcn (generated, minimally patched)
+  styles/tokens.css
+```
+
+### 12.3 Milestones and verification
+| # | Milestone | How you verify |
+|---|---|---|
+| M1 | Vite + Tailwind + shadcn + **one 8bitcn Button rendering**, fonts self-hosted | `pnpm dev`: the button renders in Press Start 2P, with no Google Fonts request in the Network tab |
+| M2 | Audio engine + 4 voices + scheduler + Play/Stop/BPM + groove (minimal UI) | You hear the groove, BPM changes are smooth, and 20 rapid Play/Stop clicks leave one loop |
+| M3 | Full sequencer grid + states + keyboard + 8bitcn transport | Toggle every cell, navigate with the keyboard only, edit during playback |
+| M4 | Signal City scene, synced | Each instrument drives its layer, and the playhead lamps match the grid |
+| M5 | Quality pass: reduced motion, responsive (320/375/768/1280), contrast, VoiceOver, lifecycle | The §14 checklist |
+| M6 | Ship pass: README, deploy instructions, screenshot/recording guide, X draft | Docs reviewed by you |
+
+## 13. Decisions (✅ all approved as recommended)
+
+| # | Decision | Recommendation |
+|---|---|---|
+| D1 | Mobile grid layout | **Split into two 8-step blocks** (§4.3). The alternative, a vertical tracker (steps as rows), is more unusual but less like a drum machine. |
+| D2 | Step cells as custom buttons styled to 8bitcn, rather than 64 8bitcn `Toggle`s | **Custom.** It's better for performance and state control, and 8bitcn stays meaningful across the transport and framing. |
+| D3 | Behavior when the tab is hidden | **Auto-stop**, rather than continuing with possible stutter. |
+| D4 | Secondary font | **IBM Plex Sans** (self-hosted) vs `system-ui` (zero dependencies). |
+| D5 | Clear has no confirmation | **No confirmation.** Groove restores the starter pattern instantly. |
+| D6 | Add vitest for logic tests | **Yes**, a small dev dependency that gives confidence in the scheduler/reducer. |
+| D7 | Package manager | **pnpm** (it matches the 8bitcn docs). |
+
+## 13a. Implementation notes (decisions made during the build)
+
+- **Silent mode when audio is blocked:** if the AudioContext can't start, playback runs on a fallback clock (`performance.now()`), so the grid and city still animate, and the blocked `Alert` explains how to retry. If audio is interrupted mid-play (an iOS call, a device change), the transport stops instead, because the audio clock freezes.
+- **Mobile cell size:** about 36px at 390px wide, 34px at 375px, and 28px at 320px. That meets the WCAG 2.5.8 minimum (24px) but is below the 36px target in §4.3 at the narrowest widths.
+- **Scene scaling:** the integer scale is computed in *device* pixels, so 2× and 3× phones get a crisp canvas that fills the width. On a 1× screen narrower than 320px the canvas falls back to 160×50 CSS px.
+- **Idle "PRESS PLAY" label:** hidden when the canvas is narrower than 400 CSS px, where it would collide with the tower sign.
+- **Grid semantics:** uses the `role="group"` + `aria-pressed` buttons option from §10, with a roving tabindex. DOM order is track-major, and CSS grid placement produces both layouts.
+
+## 14. Acceptance criteria
+
+**Sequencer**
+- [ ] All 64 steps toggle by pointer, touch, and keyboard, and keep their state across play/stop and tempo changes.
+- [ ] Toggling while stopped auditions the instrument (on-toggle only).
+- [ ] Edits during playback take effect on the next pass without interrupting the transport.
+
+**Audio and transport**
+- [ ] The four voices are clearly distinguishable on laptop speakers and headphones.
+- [ ] The loop is in time: 16 steps = 1 bar at the chosen BPM. Over 60 s at 180 BPM there is no audible drift.
+- [ ] Stop silences at once, and no scheduled notes play after it.
+- [ ] 20 Play/Stop clicks in about 5 s leave exactly one loop when it ends on Play, and silence when it ends on Stop.
+- [ ] Changing BPM 60↔180 during playback doesn't glitch, skip, or double steps.
+- [ ] No audio before the first user gesture. The blocked state is shown and recoverable.
+- [ ] The tab-hidden and unmount paths leave no running timers, rAF loops, or open contexts (checked in DevTools).
+
+**Visuals**
+- [ ] The playhead and scene events match the audible beat (no perceptible lag on wired or built-in output).
+- [ ] Each instrument triggers its own scene layer, and only when its note actually plays.
+- [ ] Idle, playing, cleared-playing, and blocked scene states all appear correctly.
+- [ ] The canvas is always integer-scaled (crisp pixels at every width).
+
+**Accessibility and responsive**
+- [ ] The whole experience is operable by keyboard alone, with a visible focus everywhere.
+- [ ] VoiceOver announces the track, step, and pressed state for cells, a name and value for BPM, and Play/Stop state changes.
+- [ ] Reduced motion removes movement, flicker, and glow decay, and keeps the playhead.
+- [ ] No horizontal overflow at 320, 375, 768, 1024, or 1440px. Touch cells are ≥ 36px on mobile.
+- [ ] Contrast targets in §10 are met (or adjustments are documented).
+
+**8bitcn and shipping**
+- [ ] Real 8bitcn components are used: Button, Slider, Card, Badge, Kbd, Alert. The README lists exactly which ones, and any local patches.
+- [ ] No runtime errors in the console. No Google Fonts or other third-party requests at runtime.
+- [ ] The README covers run commands, stack, design choices, and known limitations (Bluetooth latency, background tabs, iOS silent switch).
+
+## 15. Explicitly out of scope for Day 001
+Multiple presets beyond SIGNAL, mute/solo, swing, per-track volume, local-storage save, share URLs, audio export, paint-drag editing, accents/velocity, MIDI, and a richer multi-scene world. The stretch goals (only after MVP): global shortcuts, warm-up/blackout, Clear undo toast.

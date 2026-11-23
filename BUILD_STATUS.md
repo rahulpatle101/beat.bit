@@ -73,6 +73,48 @@
 | — | [—] | Not verified: real iOS/Android devices, VoiceOver, human listening test | Needs you or a device |
 
 
+
+### V2.2 — Playfulness: Curated Grooves + Remix Dice (2026-11-23)
+
+**Commit:** `ba05c2b` (pushed). **Spec:** DESIGN.md → V2.2 (decisions P1–P6, Remix rules, acceptance) · ART_DIRECTION.md → V2.2 mood addendum.
+
+**Implemented**
+- **Grooves:** SIGNAL (starter) + BOOM BAP 90 · TECHNO 128 · BOSS FIGHT 150, each with a subtle sky mood. The picker is an 8bitcn **Toggle Group**, added with the shadcn CLI (the prompt to overwrite our patched `retro.css` was declined) and patched locally: `radix-ui` types, className order, focus ring, and selected fill. No new npm dependencies.
+- **Remix Dice** (`src/data/remix.ts`, pure): 2–4 musical changes, at least one audible; anchors, caps, and a drift limit of 8; never empties a track; an empty pattern gets a backbone.
+- **Undo:** 30-step history for remix, clear, and groove change. Disabled when empty.
+- **Feedback:** a grid roll ring on the changed cells, a rolling pixel die on REMIX, a 3-frame window "dice tumble", and live announcements. Reduced-motion variants for all of them.
+- **First 5 seconds:** a header tagline and updated hint copy.
+
+**Verification**
+
+| Check | Method | Result |
+|---|---|---|
+| Remix invariants | [T] 2,000 single rolls + 9,600 chained rolls (4 grooves × 60 seeds × 40) | ✅ 2–4 changes, ≥1 audible, anchors kept, drift ≤ 8, caps held, no track emptied, pure + deterministic. Two bugs found and fixed during the build: drift-control reverts could empty a track or exceed a cap. |
+| Preset switching mid-play | [B] Cadence after each switch | ✅ BOOM BAP 166.7 ms (exp 166.7) · TECHNO 117.6 (117.2) · BOSS FIGHT 99.9 (100) · SIGNAL 143.7 (144.2). Steps in order across a switch. Picker, readout, sky mood, and announcement updated. |
+| Repeated remix during playback | [B] 25 rolls, 200 ms apart, at 90 BPM | ✅ All 2–4 changes, anchors kept, max drift 8, cadence 166.7 ms in order (unchanged), die = roll size, "EDITED" shown |
+| Undo | [B] | ✅ 25 remixes undone in exact reverse order. Groove switch undone (groove, BPM, mood). Clear undone. Then disabled. |
+| Remix feedback | [B] 12 spaced rolls | ✅ Every changed cell is highlighted with the right kind (on/off), and highlights clear afterwards. City tumble: 24 amber px at peak vs 4 baseline. The die shows 5 faces while tumbling. |
+| Reduced motion | [B] Emulated | ✅ Static ring (`animation: none`), no city tumble (4 = baseline), die jumps straight to the result |
+| Keyboard | [B] Real Tab, arrow, and Enter presses | ✅ PLAY → Tempo → picker (1 stop) → REMIX → (UNDO skipped while disabled) → CLEAR → grid, all with a 2px focus ring. → → Enter loads TECHNO and is announced. Enter on REMIX rolls. |
+| Mobile | [B] 375 px @ 2× DPR | ✅ No horizontal overflow. Picker buttons 40 px tall; grooves wrap 2×2. |
+| V2.1 regression | [B] Performer probe + regression suite | ✅ Performers on the same steps with 0-frame lag. 144.47 / 83.2 ms at 104 / 180 BPM. No stuck poses. Grid keyboard and scene description intact. |
+| Unit tests | [T] | ✅ 25/25 |
+| Demo recording | [B] Screencast → ffmpeg | ✅ 21.6 s, silent (headless Chrome can't capture audio) |
+
+**Bundle:** JS ~327 KB (~105 KB gzip).
+
+**Remaining issues after V2.2**
+
+| # | Severity | Issue |
+|---|---|---|
+| G1 | **Needs you** | The three new grooves and remix variations haven't been heard by a human. The step patterns are musically conventional, but the synthesized kit and the pattern choices need your ears. |
+| G2 | Low (layout) | On phones the action row wraps (REMIX + UNDO, then CLEAR alone). Functional, but slightly untidy. |
+| G3 | Info | Mood tints are deliberately subtle. On some displays the warm and red skies may read very close to night. |
+| G4 | Info | The remix origin resets on any manual edit, so after hand edits the "identity" is your edited pattern, not the preset. This is intended; it's noted here for review. |
+| V1 | Low | Resident cheer pose (carried over from V2.1) |
+| D5 | Low | Mobile grid cells ~34 px at 375 px (V2.4) |
+| — | [—] | Not verified: real devices, VoiceOver, human listening |
+
 ## How findings were verified
 
 | Tag | Meaning |

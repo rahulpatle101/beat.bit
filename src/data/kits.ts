@@ -4,7 +4,7 @@
 //   lines: "step NOTE len [vel]" comma-separated (steps 0–15, len in 16ths), e.g. "0 E2 2, 3 E3 1 .7"
 //   chords: "step N1.N2.N3 len [vel]"
 
-import type { BassPreset, ChordPreset, LeadPreset } from '@/audio/instruments'
+import type { BassSound, ChordSound, LeadSound } from '@/audio/kitPlayer'
 import { STEPS, TRACK_IDS, type MoodId, type Pattern, type TrackId } from './patterns'
 
 export type DrumKey = 'kick' | 'snare' | 'hat' | 'clap' | 'ohat' | 'crash' | 'shaker'
@@ -45,7 +45,7 @@ export interface Kit {
   bpm: number
   key: string
   harmony: string
-  presets: { bass: BassPreset; chords: ChordPreset; lead: LeadPreset; lead2?: LeadPreset }
+  presets: { bass: BassSound; chords: ChordSound; lead: LeadSound; lead2?: LeadSound }
   sections: Section[]
 }
 
@@ -112,7 +112,8 @@ export const NEON_DRIVE: Kit = {
   bpm: 112,
   key: 'E Dorian',
   harmony: 'i9 – IV13 vamp (Em9 | A13); variation bVI – bVII – i – IV (Cmaj7 | D6/9 | Em9 | A13)',
-  presets: { bass: 'funk', chords: 'stab', lead: 'warm', lead2: 'pulse25' },
+  // V3.2a: the NIGHT DRIVE sound set chosen in the Sound Lab (was funk / stab / warm / pulse25).
+  presets: { bass: 'funkbass', chords: 'dreampad', lead: 'neon', lead2: 'neon' },
   sections: [
     {
       name: 'intro',

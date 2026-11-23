@@ -1,0 +1,75 @@
+/* DOWNLOAD BEAT: pixel cassette feedback (Oil 6 palette, used only here for now). */
+
+.cassette {
+  --oil-1: #fbf5ef;
+  --oil-2: #f2d3ab;
+  --oil-3: #c69fa5;
+  --oil-4: #8b6d9c;
+  --oil-5: #494d7e;
+  --oil-6: #272744;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+/* Reels: two spoke frames swapped in steps, which reads as a slow pixel rotation. */
+.cassette .reel-b {
+  opacity: 0;
+}
+.cassette[data-state='rendering'] .reel-a {
+  animation: cassette-a 0.5s linear infinite;
+}
+.cassette[data-state='rendering'] .reel-b {
+  animation: cassette-b 0.5s linear infinite;
+}
+@keyframes cassette-a {
+  0%,
+  49.9% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cassette-b {
+  0%,
+  49.9% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Done: one small hop, then rest. */
+.cassette[data-state='done'] {
+  animation: cassette-hop 0.36s steps(3, end) 1;
+}
+@keyframes cassette-hop {
+  0% {
+    transform: translateY(0);
+  }
+  33% {
+    transform: translateY(-3px);
+  }
+  66% {
+    transform: translateY(-1px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.cassette[data-state='error'] {
+  opacity: 0.55;
+}
+
+/* Reduced motion: a static cassette in every state (the label still changes). */
+@media (prefers-reduced-motion: reduce) {
+  .cassette,
+  .cassette .reel-a,
+  .cassette .reel-b {
+    animation: none !important;
+  }
+}

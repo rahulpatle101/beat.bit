@@ -1,21 +1,37 @@
-// Transport (DESIGN.md §6, §8.2 + V2.2): Play/Stop, tempo, curated grooves, Remix, Undo, Clear.
-// Built from 8bitcn Button, Slider and Toggle Group.
+// Transport (DESIGN.md §6, §8.2 + V2.2): Play/Stop, tempo, curated grooves, Remix, Undo, Clear,
+// and (V3.3) DOWNLOAD BEAT. Built from 8bitcn Button, Slider and Toggle Group.
 
 import { useEffect, useRef, useState } from 'react'
+import { ExportPanel } from '@/components/ExportPanel'
+import { RemixSettings } from '@/components/RemixSettings'
+import type { RemixSettings as RemixSettingsValue } from '@/hooks/useSequencer'
+import { BAND_LABEL, bandOf, type Part } from '@/data/remixMusic'
+import type { Bar } from '@/data/kits'
 import { Button } from '@/components/ui/8bit/button'
 import { Slider } from '@/components/ui/8bit/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/8bit/toggle-group'
 import { KITS, type KitId } from '@/data/kits'
-import { BPM_MAX, BPM_MIN } from '@/data/patterns'
+import { BPM_MAX, BPM_MIN, type Pattern } from '@/data/patterns'
 import { cn } from '@/lib/utils'
 
 interface Props {
   playing: boolean
   bpm: number
+  /** The current grid (captured by DOWNLOAD BEAT). */
+  pattern: Pattern
   kitId: KitId
   /** Kits the player can load (others show as locked). */
   unlocked: readonly KitId[]
   edited: boolean
+  /** V3.4: the kit's main bars as currently played (captured by DOWNLOAD BEAT). */
+  music: Bar[]
+  /** Anything differs from the kit's original (enables RESTORE ORIGINAL). */
+  modified: boolean
+  remixSettings: RemixSettingsValue
+  remixUnavailable: Partial<Record<Part, string>>
+  lastSeed: number | null
+  onRemixSettings: (s: RemixSettingsValue) => void
+  onRestore: () => void
   canUndo: boolean
   /** Increments on every remix; `rollSize` is how many cells that roll changed. */
   rollKey: number
@@ -27,6 +43,8 @@ interface Props {
   onRemix: () => void
   onUndo: () => void
   onClear: () => void
+  /** Polite live-region announcement. */
+  onAnnounce: (msg: string) => void
 }
 
 function PixelIcon({ kind }: { kind: 'play' | 'stop' }) {
@@ -54,6 +72,19 @@ const PIPS: Record<number, [number, number][]> = {
   4: [[2, 2], [6, 2], [2, 6], [6, 6]],
   5: [[2, 2], [6, 2], [4, 4], [2, 6], [6, 6]],
   6: [[2, 2], [6, 2], [2, 4], [6, 4], [2, 6], [6, 6]],
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 7 7" aria-hidden="true" shapeRendering="crispEdges" className="size-3.5">
+      <rect x="3" y="0" width="1" height="4" fill="currentColor" />
+      <rect x="1" y="2" width="1" height="1" fill="currentColor" />
+      <rect x="5" y="2" width="1" height="1" fill="currentColor" />
+      <rect x="2" y="3" width="1" height="1" fill="currentColor" />
+      <rect x="4" y="3" width="1" height="1" fill="currentColor" />
+      <rect x="0" y="6" width="7" height="1" fill="currentColor" />
+    </svg>
+  )
 }
 
 function LockIcon() {
@@ -107,9 +138,17 @@ function useRollingFace(rollKey: number, rollSize: number) {
 export function TransportControls({
   playing,
   bpm,
+  pattern,
   kitId,
   unlocked,
   edited,
+  music,
+  modified,
+  remixSettings,
+  remixUnavailable,
+  lastSeed,
+  onRemixSettings,
+  onRestore,
   canUndo,
   rollKey,
   rollSize,
@@ -120,8 +159,16 @@ export function TransportControls({
   onRemix,
   onUndo,
   onClear,
+  onAnnounce,
 }: Props) {
   const face = useRollingFace(rollKey, rollSize)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const downloadRef = useRef<HTMLButtonElement>(null)
+  const closeExport = () => {
+    setExportOpen(false)
+    downloadRef.current?.focus()
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -205,8 +252,19 @@ export function TransportControls({
             <Die face={face} />
             REMIX
           </Button>
+          <Button
+            variant="outline"
+            className="h-10 px-3 text-[10px]"
+            aria-expanded={settingsOpen}
+            aria-controls="remix-settings"
+            aria-label={`Remix settings: temperature ${remixSettings.temperature}, ${BAND_LABEL[bandOf(remixSettings.temperature)].toLowerCase()}`}
+            onClick={() => setSettingsOpen((o) => !o)}
+          >
+            {BAND_LABEL[bandOf(remixSettings.temperature)]} {settingsOpen ? '▴' : '▾'}
+          </Button>
           <span id="remix-help" className="sr-only">
-            Rolls a small variation of the current beat. Undo restores the previous pattern.
+            Rolls a seeded variation of the drums, melody and bass (see Remix settings). While playing it
+            lands on the next bar. Undo restores the previous version exactly.
           </span>
           <Button variant="outline" className="h-10" onClick={onUndo} disabled={!canUndo}>
             UNDO
@@ -214,8 +272,41 @@ export function TransportControls({
           <Button variant="outline" className="h-10" onClick={onClear}>
             CLEAR
           </Button>
+          <Button
+            ref={downloadRef}
+            variant="outline"
+            className="h-10"
+            aria-expanded={exportOpen}
+            aria-controls="export-panel"
+            onClick={() => setExportOpen((o) => !o)}
+          >
+            <DownloadIcon />
+            DOWNLOAD
+          </Button>
         </div>
       </div>
+
+      <RemixSettings
+        id="remix-settings"
+        open={settingsOpen}
+        temperature={remixSettings.temperature}
+        parts={remixSettings.parts}
+        unavailable={remixUnavailable}
+        seed={lastSeed}
+        modified={modified}
+        onTemperature={(temperature) => onRemixSettings({ ...remixSettings, temperature })}
+        onParts={(parts) => onRemixSettings({ ...remixSettings, parts })}
+        onRestore={onRestore}
+      />
+
+      <ExportPanel
+        id="export-panel"
+        open={exportOpen}
+        snapshot={{ kitId, bpm, pattern, mainBars: music }}
+        edited={edited}
+        onClose={closeExport}
+        onAnnounce={onAnnounce}
+      />
 
     </div>
   )

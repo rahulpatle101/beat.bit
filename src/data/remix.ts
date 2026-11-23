@@ -161,7 +161,16 @@ function weightedMove(moves: Move[], rng: () => number): Move {
  * Roll a variation of `current`. `origin` is the pattern the remix chain started from
  * (anchors + drift limit are measured against it).
  */
-export function remix(current: Pattern, origin: Pattern, rng: () => number = Math.random): RemixResult {
+export interface DrumRemixOptions {
+  /** Changes per roll (inclusive range). */
+  min: number
+  max: number
+  /** Max cells away from the origin pattern after the roll. */
+  drift: number
+}
+
+export function remix(current: Pattern, origin: Pattern, rng: () => number = Math.random, opts?: DrumRemixOptions): RemixResult {
+  const MAX_DRIFT_ = opts?.drift ?? MAX_DRIFT
   if (isEmpty(current)) {
     const pattern = backbone()
     const changes: Change[] = []
@@ -169,13 +178,14 @@ export function remix(current: Pattern, origin: Pattern, rng: () => number = Mat
     return { pattern, changes }
   }
 
-  const target = MIN_CHANGES + (rng() < 0.5 ? 0 : 1) + (rng() < 0.25 ? 1 : 0) // 2–4
+  // V2.2 default: 2–4 changes. V3.4 temperature: min..max (drumOptions in remixMusic.ts).
+  const target = opts ? opts.min + Math.floor(rng() * (opts.max - opts.min + 1)) : MIN_CHANGES + (rng() < 0.5 ? 0 : 1) + (rng() < 0.25 ? 1 : 0)
   const ctx: Ctx = { p: clonePattern(current), origin, rng, touched: new Set(), budget: target }
   const out: Change[] = []
 
   // 1. Drift control: revert enough differences so this roll can't exceed MAX_DRIFT.
   const drift = hamming(current, origin)
-  const reverts = Math.ceil(Math.max(0, drift + target - MAX_DRIFT) / 2)
+  const reverts = Math.ceil(Math.max(0, drift + target - MAX_DRIFT_) / 2)
   if (reverts > 0) {
     const diffs: Change[] = []
     for (const t of TRACK_IDS)
@@ -198,7 +208,7 @@ export function remix(current: Pattern, origin: Pattern, rng: () => number = Mat
       done++
     }
     // If some reverts had to be skipped, shrink the remaining budget to the drift headroom.
-    ctx.budget = Math.max(0, Math.min(ctx.budget, MAX_DRIFT - hamming(ctx.p, origin)))
+    ctx.budget = Math.max(0, Math.min(ctx.budget, MAX_DRIFT_ - hamming(ctx.p, origin)))
   }
 
   // 2. Make sure the roll is audible (kick, snare, or clap changes).

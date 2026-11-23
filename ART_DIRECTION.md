@@ -2,6 +2,7 @@
 
 **Day 001 / 100 Days of Digital Craft** · Stage 2 of 4
 **Status:** ✅ V1 APPROVED on 2026-11-23 with **Direction A: Signal City** · ✅ **V2.1 amendment (Signal City Live) APPROVED on 2026-11-23**, see [the end of this document](#v21-amendment--signal-city-live)
+**V3.2 (proposed):** the pixel world moves to the **Oil 6** palette, see [V3.2 Addendum](#v32-addendum--oil-6-pixel-world). This is awaiting approval.
 **Builds on:** [RESEARCH.md](RESEARCH.md) · **Feeds:** [DESIGN.md](DESIGN.md)
 
 ## Approved decisions
@@ -287,3 +288,155 @@ The BIT sign stays "BIT" (a "BOSS" sign would change the approved tower geometry
 
 - New track color **`--lead: #6fcf97`** (muted mint), for melody only: 8.06:1 on an empty cell, dark glyph on mint 10.15:1 [computed]. Used now for the MELODY toggle's on state.
 - **Elevator light (V2.3b):** the tower's 6 window rows below the BIT sign map to the 6 scale degrees. Each note lights the two centre windows of its row in `--lead` for the note's length, with a 2-frame fade (instant with reduced motion). No new performer, sky change, or glow. The four performers stay the stars.
+
+---
+
+## V3.2 Addendum — Oil 6 pixel world
+
+**Status:** ⏳ PROPOSED on 2026-11-24, awaiting approval. Studies only: the production renderer (`src/scene/city.ts`) and the UI are unchanged.
+**Replaces** the earlier SLSO-CLR17 palette proposal, which was never implemented.
+**Palette:** [Oil 6 by GrafxKid](https://lospec.com/palette-list/oil-6).
+**Previews:** run `npm run dev`, then open `/dev/oil6.html`. The PNG exports are listed in §8 below.
+
+### 1. The palette and its roles
+
+| # | Hex | Name | Main roles |
+|---|---|---|---|
+| 0 | `#272744` | navy | Night sky top, nearest silhouettes, figure bodies, outlines |
+| 1 | `#494d7e` | indigo | Night horizon, far skyline, unlit windows, street/lamps at night |
+| 2 | `#8b6d9c` | mauve | Moon-glow horizon, rain streaks, wet street, daylight buildings, sunset sky top |
+| 3 | `#c69fa5` | dusty rose | Night rim light ("moon rim"), sign glow, sunset middle sky, daylight far skyline |
+| 4 | `#f2d3ab` | peach | Lit windows, skin, lamp halo, sunset horizon and clouds, street rim at sunset |
+| 5 | `#fbf5ef` | cream | **Reserved for the brightest moments:** moon/sun, hit frames (stomper, bird eye, hat star), snare windows, lit playhead lamp |
+
+The code is in `src/scene/oil6.ts`:
+- `OIL6` holds the six colours.
+- `WorldRoles` holds the semantic roles: sky stops, orb, clouds, buildings plus lit edge, far skyline, windows (off / lit / hit), sign, wire, street, lamps, performers (body / sky rim / street rim / hit), track accents, character ramp, rain, reflection and haze.
+- `WORLDS` holds the four light settings.
+
+### 2. Rules
+
+1. **Only six colours in the pixel world, and no alpha.** The current renderer uses alpha (30% windows, 35% stars, glows), which produces off-palette colours. In Oil 6, every in-between tone is a **4×4 Bayer ordered dither** between two palette neighbours: sky gradients, haze, lamp halos, cloud edges and reflections.
+2. **Lighting is value-led, not hue-led.** Light settings differ by redistributing the six colours across roles (§3), not by adding tints.
+3. **Cream is the beat.** At rest, cream appears only on the moon or sun. On a hit it marks what played: the stomper's body, the bird's eye, a star or the antenna, snare windows, and the playhead lamp. The beat is therefore the brightest thing in the scene in every setting.
+4. **Silhouettes get a rim that depends on what's behind them:**
+   - figures against the **sky** (crowd, birds) use `actorRim`;
+   - figures against **buildings** (stomper, character) use `actorRimStreet`.
+
+   One rim for both failed readability, because the rim matched the sky in Sunset. Sunset sky figures are pure backlit silhouettes with no rim.
+5. **Track identity in the scene comes from place, shape and motion, not hue.** Kick = the street stomper and street line, snare = apartment windows, hi-hat = birds, star and antenna, clap = rooftop crowd and the BIT sign. The UI grid keeps its track hues and glyphs (see Decision 3 in §9).
+
+### 3. The four light settings (same composition)
+
+| | Moonlit Night | Warm Sunset | Rainy Night | Soft Daylight |
+|---|---|---|---|---|
+| Sky (top → horizon) | navy → indigo → mauve glow | mauve → rose → peach, with peach streak clouds | indigo → mauve (city glow), navy cloud bellies | rose → peach → cream, with cream puff clouds |
+| Orb | Cream crescent moon, upper right | Cream sun **behind** the skyline | None | Small cream sun, upper left |
+| Buildings / lit edge | navy / indigo on the right (moon side) | indigo / mauve along roof tops (backlit) | navy / none (flat, wet) | mauve / rose on the left (sun side) |
+| Far skyline | indigo | mauve, peach haze at the base | indigo, mauve haze | rose, peach haze |
+| Windows (off / lit / hit) | indigo / peach / cream | navy / peach / cream | indigo / peach / cream | indigo / peach / cream |
+| Figures (body / sky rim / street rim) | navy / rose / rose | navy / none / peach | navy / rose / rose | navy / navy (solid) |
+| Weather | Stars (rose), the hat star in cream | — | 3 px slanted mauve streaks (rose on hats), wet mauve street with dithered reflections, cream kick splashes | — |
+| Pixel share at rest (navy / indigo / mauve / rose / peach / cream) | mostly navy and indigo | balanced across all six | navy and indigo with mauve | mauve, rose and peach |
+
+### 4. Readability (measured)
+
+Method: the share of a sprite's outline pixels that differ from the background pixel next to them by **at least 2 Oil 6 value steps**. Each study was rendered with and without the sprite.
+
+| Setting | Character | Stomper | Crowd | Birds |
+|---|---|---|---|---|
+| Moonlit (rest / beat) | 0.77 / 0.73 | 0.87 / 0.89 | 1.00 / 0.80 | 0.86 / 1.00 |
+| Sunset | 0.75 / 0.76 | 0.74 / 0.89 | 1.00 / 1.00 | 0.63 / 0.96 |
+| Rainy | 0.84 / 0.82 | 0.73 / 0.89 | 0.83 / 0.77 | 0.83 / 1.00 |
+| Daylight | 0.78 / 0.86 | 0.73 / 0.92 | 1.00 / 0.89 | 0.65 / 0.70 |
+
+- **Colour census:** each of the 8 frames uses exactly the 6 Oil 6 colours, with **0 off-palette pixels**.
+- **Iteration:** the first pass failed:
+  - Moonlit buildings merged with the sky;
+  - Rainy Night was noise;
+  - the Sunset crowd and birds scored 0.32 because the rim matched the sky;
+  - the Daylight stomper scored 0.18.
+
+  The final role mapping fixes all four.
+- **Weakest remaining points:**
+  - birds at rest in Sunset (0.63) and Daylight (0.65), which are still clearly visible at 4×;
+  - the 1×-size character in Rainy Night, where streaks pass close by (rain is drawn *behind* figures for this reason).
+
+### 5. The character (proposal used in the studies)
+
+- An original 8×14 figure placed in front of building 6: headphones, hair, skin, a jacket with a zip highlight, trousers and shoes.
+- Two poses:
+  - **rest**;
+  - **groove hit**: arm up, knee bent, and the headphone pixel turns cream.
+- Character ramp per setting:
+  - dark: navy;
+  - skin: peach;
+  - jacket: mauve (night), rose (sunset/rain) or cream (daylight, where a darker jacket scored 0.47);
+  - highlight: cream (indigo in daylight).
+
+At the proposed 192×108 canvas it grows to about 14×22 with the same ramp.
+
+### 6. Current artwork vs Oil 6
+
+| | Current Signal City | Oil 6 studies |
+|---|---|---|
+| Mood | Low-key, near-black, "city at 3 am". Murky at rest: the scene almost disappears. | Atmospheric and nostalgic, closer to painted pixel art. A readable city at rest in all four settings. |
+| Beat feedback | Strong through saturated hue pops (coral, amber, teal, violet) | Strong through **value**: cream and peach against a darker field. It's slightly less "colour-coded", but each hit still lands in its own place. |
+| Variety | 4 moods = 4 near-black sky tints, which are hard to tell apart | 4 genuinely different worlds from the same 6 colours |
+| Cohesion with UI | Matches today's UI tokens | Clashes softly with the saturated UI track colours until the UI is aligned (Decision 3) |
+| Technical | Alpha blending | Strict palette, dither only. This is cheaper to pre-render as tiles for the scrolling city. |
+
+**Recommendation: adopt Oil 6 for the pixel world.**
+- **Moonlit Night** becomes the default/home setting: the calmest, with the strongest beat contrast and the most "BEAT.BIT".
+- **Warm Sunset** is the hero image for screenshots and the X post: it's the most striking frame.
+- Map one light setting per kit, replacing the current near-black tints. This also matches the existing `mood` field:
+  - NEON DRIVE (`warm`) → **Warm Sunset**
+  - PIXEL QUEST (`night`) → **Soft Daylight**: a bright chiptune adventure; rename the mood to `day`
+  - NIGHT SHIFT (`teal`) → **Moonlit Night**
+  - BOSS RUSH (`red`) → **Rainy Night**: tension and drive
+- With the future WORLD button, any setting can be combined with any kit.
+
+### 7. Applying Oil 6 to the V3.2 plans
+
+**Horizontally scrolling city (parallax):**
+- **Aerial perspective by value:** the further a layer is, the closer its value is to the horizon sky.
+  - At night: far skyline indigo → mid buildings navy, with lit windows → street navy → foreground navy with a rim.
+  - In daylight it inverts: far rose → mid mauve → foreground indigo or navy.
+- Each layer uses at most **3** of the six colours (body, edge, and one light), so layers never compete with the performers.
+- Seeded chunks are pre-rendered per light setting as palette-exact tiles. Changing the setting swaps the role table and re-renders the tiles; nothing is tinted at runtime.
+- Signage: original pixel words in rose (lit) / indigo (off), always 3×5 letters like the BIT sign.
+
+**Groove-specific character animation:**
+- The character ramp is fixed per light setting (§5). Groove styles change **motion and accent pixels, not colours**:
+  - NEON DRIVE: a funk strut, with a cream headphone flash on accented hats;
+  - PIXEL QUEST: a hop-skip, with cream shoes on the jump;
+  - NIGHT SHIFT: a house shuffle, with the jacket zip flashing on offbeat hats;
+  - BOSS RUSH: a charge, with a cream outline frame on the crash.
+- **Hit frames always use cream.** Ghost notes use peach. Velocity maps to value (accent → cream, normal → peach, ghost → rose).
+- Reduced motion: pose swaps only. The colour flash stays, because it is information, not motion.
+
+**Weather effects:**
+- **Rain:** 1 px wide, 3 px slanted streaks in the rain colour (mauve), capped at about 85–120 at 160×50. Hi-hats switch about 1 in 6 to rose. Kicks put cream 1 px splashes on the street line.
+- **Reflections:** lit windows and signs mirror into the street band as **broken dashes on alternate rows**, using a 50% dither. Never alpha, never a solid block.
+- **Fog/haze:** a Bayer ramp of the haze colour over the far layer's lower 8–10 px. It can thicken in breakdowns (music energy → haze level).
+- **Lightning (optional):** one frame where the sky stops shift one step lighter. It's suitable only for BOSS RUSH drops, and it's off with reduced motion.
+- **Reduced motion:**
+  - rain becomes static streaks (no fall);
+  - splashes and lightning are off;
+  - reflections stay static.
+
+### 8. Preview files
+
+All are in the scratchpad (regenerate them with `oil6.pngs()` on `/dev/oil6.html`):
+
+`/private/tmp/claude-501/-Users-rahulpatle-Documents-101Dev-100-Days-of-Digital-Craft-day-001-8bitcn-experiment-beat-bit/f8782503-0cd1-4214-a79b-e7e85a40cc64/scratchpad/oil6/`
+- `oil6-contact-sheet-4x.png`: the current artwork plus the 4 studies, rest | beat, at 4×.
+- `oil6-actual-size-1x.png`: all five on the beat at true 160×50 pixels.
+- `png/`: 20 individual frames (current plus 4 studies × rest/beat × 1×/4×).
+
+### 9. Decisions needed
+
+1. **Adopt Oil 6 for the pixel world** (recommended), with Moonlit Night as the default?
+2. **One light setting per kit** (mapping in §6), or one global setting chosen with WORLD?
+3. **The UI:** keep today's UI tokens and track hues for now (recommended: scene first, then evaluate), or re-theme the UI to Oil 6 as well? Re-theming means track colours become **value plus glyph** (four distinguishable colours out of six, with the glyphs carrying identity), and contrast must be re-checked.
+4. **Approve the street-rim / sky-rim rule and the 8×14 character proposal** as the base for V3.2b.

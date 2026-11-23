@@ -5,7 +5,10 @@
 // editable grid, in Arcade partly from the player.
 
 import type { Bar, Kit, Note } from '@/data/kits'
-import { bass, chord, crash, lead, openHat, shaker, tom, type Mix } from './instruments'
+import { bass, chord, crash, lead, openHat, shaker, tom, type BassPreset, type ChordPreset, type LeadPreset, type Mix } from './instruments'
+import { GAINS } from './synth/calibration'
+import { isSynthId, presetById, type SynthId } from './synth/presets'
+import { playPreset } from './synth/presetSynth'
 
 export interface Voices {
   ctx: BaseAudioContext
@@ -28,6 +31,33 @@ export function glideFrom(notes: Note[], index: number): number | undefined {
   return prev.step + prev.len === n.step && Math.abs(prev.midi - n.midi) <= 3 ? prev.midi : undefined
 }
 
+/** A kit role's sound: one of the original instrument voices, or a synth preset id (SOUND_DIRECTION.md). */
+export type BassSound = BassPreset | SynthId
+export type ChordSound = ChordPreset | SynthId
+export type LeadSound = LeadPreset | SynthId
+
+/** Play a synth preset at its loudness-matched gain (same call as the Sound Lab and its WAVs). */
+function synth(v: Voices, out: AudioNode, id: SynthId, time: number, midis: number[], dur: number, vel: number, stepSec: number, glide?: number) {
+  playPreset(v.ctx, out, presetById(id), time, midis, dur, { stepSec, velocity: vel, gain: GAINS[id], glideFrom: glide })
+}
+
+export function playBassNote(v: Voices, sound: BassSound, notes: Note[], i: number, time: number, stepSec: number) {
+  const n = notes[i]
+  if (isSynthId(sound)) synth(v, v.mix.bass, sound, time, [n.midi], n.len * stepSec, n.vel, stepSec, glideFrom(notes, i))
+  else bass(v.ctx, v.mix.bass, time, n.midi, n.len * stepSec, n.vel, sound)
+}
+
+export function playChordHit(v: Voices, sound: ChordSound, midis: number[], time: number, dur: number, vel: number, stepSec: number) {
+  if (isSynthId(sound)) synth(v, v.mix.chords, sound, time, midis, dur, vel, stepSec)
+  else chord(v.ctx, v.mix.chords, time, midis, dur, vel, sound, stepSec)
+}
+
+export function playLeadNote(v: Voices, sound: LeadSound, notes: Note[], i: number, time: number, stepSec: number) {
+  const n = notes[i]
+  if (isSynthId(sound)) synth(v, v.mix.lead, sound, time, [n.midi], n.len * stepSec, n.vel, stepSec, glideFrom(notes, i))
+  else lead(v.ctx, v.mix.lead, time, n.midi, n.len * stepSec, n.vel, sound, sound === 'warm' || sound === 'hero' ? glideFrom(notes, i) : undefined)
+}
+
 export function playKitStep(v: Voices, kit: Kit, bar: Bar, step: number, time: number, stepSec: number) {
   const { ctx, mix, noise } = v
   // Extra drums (not on the editable grid).
@@ -39,19 +69,12 @@ export function playKitStep(v: Voices, kit: Kit, bar: Bar, step: number, time: n
   if (sh) shaker(ctx, mix.drums, time, sh, noise)
   for (const n of bar.toms ?? []) if (n.step === step) tom(ctx, mix.drums, time, n.midi, n.vel)
 
-  for (const n of bar.bass ?? []) if (n.step === step) bass(ctx, mix.bass, time, n.midi, n.len * stepSec, n.vel, kit.presets.bass)
-  for (const c of bar.chords ?? []) if (c.step === step) chord(ctx, mix.chords, time, c.midis, c.len * stepSec, c.vel, kit.presets.chords, stepSec)
+  bar.bass?.forEach((n, i) => n.step === step && playBassNote(v, kit.presets.bass, bar.bass!, i, time, stepSec))
+  for (const c of bar.chords ?? []) if (c.step === step) playChordHit(v, kit.presets.chords, c.midis, time, c.len * stepSec, c.vel, stepSec)
   for (const c of bar.riff ?? [])
     if (c.step === step) chord(ctx, mix.chords, time, c.midis, c.len * stepSec, (bar.riffBright ?? 0.5) * c.vel, 'riff', stepSec)
 
-  const leadLine = (notes: Note[] | undefined, preset: Kit['presets']['lead']) => {
-    if (!notes) return
-    notes.forEach((n, i) => {
-      if (n.step !== step) return
-      const glide = preset === 'warm' || preset === 'hero' ? glideFrom(notes, i) : undefined
-      lead(ctx, mix.lead, time, n.midi, n.len * stepSec, n.vel, preset, glide)
-    })
-  }
+  const leadLine = (notes: Note[] | undefined, sound: LeadSound) => notes?.forEach((n, i) => n.step === step && playLeadNote(v, sound, notes, i, time, stepSec))
   leadLine(bar.lead, kit.presets.lead)
   leadLine(bar.lead2, kit.presets.lead2 ?? kit.presets.lead)
 }

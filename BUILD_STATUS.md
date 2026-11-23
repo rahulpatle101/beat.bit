@@ -223,6 +223,91 @@
 - The V3.2 decisions in V2_ROADMAP Part 6.
 - Earlier carry-overs: phone cells below 36 px at 375 px (33 px), no real-device or VoiceOver test, nobody has listened yet.
 
+### V3.2a — Sound Direction & Synth Preset Lab (2026-11-24, ✅ lab built, ⏳ awaiting listening review)
+
+Details: SOUND_DIRECTION.md. **The production engine, kit data and main UI are unchanged. No dependencies were installed.**
+
+- **References compared** (native vs retro-sound vs Tone.js). Recommendation: stay native. Tone.js would add +79.7 KB gzip and a second transport; retro-sound is too thin and has timing bugs.
+- **12 original presets** as pure timbre data (`src/dev/soundlab/presets.ts`), played by one data-driven voice that takes a `BaseAudioContext`. The same `playStep` function serves live playback and offline WAV.
+- **Isolated lab** at `dev/sound-lab.html`: A/B sets, solo per role, a loudness-match toggle, drums on/off, spec cards, WAV download, a QA table, and a rapid A/B timing test.
+- **Verified** [B][T]:
+  - all 12 presets PASS automated QA: matched within ±0.2 LU (ffmpeg-confirmed), 0 clipped samples, no clicks (worst edge ratio 0.97 < 1.25), silent tails, harshness limits, bass audible in the 150 Hz–2 kHz laptop band;
+  - 29 random A/B flips during playback: 0 ms interval error, 0 missing or late steps;
+  - silence after Stop and after rapid Play/Stop;
+  - 60/60 tests, lint clean (no errors), bundle unchanged at 381.58 KB.
+- **Open items:**
+  - human listening (not done);
+  - chords sit +2.5 to +3.7 LU hotter over the full arrangement;
+  - NIGHT DRIVE true peak −0.1 dBTP (export needs headroom);
+  - Dream Pad CPU on phones.
+
+### V3.2b — NEON DRIVE gets the NIGHT DRIVE sound (2026-11-24, ✅ built, not committed)
+
+- **What changed:** after your listening review, NEON DRIVE now uses Neon Lead · Funk Bass · Dream Pad. The synth voice was promoted to `src/audio/synth/`, the kit player routes preset ids, and the composition is unchanged.
+- **Verified** [B][T]:
+  - The app render matches the lab WAV (−13.9 LUFS).
+  - Live: Play → sound in 297 ms; kits, Remix/Undo/Clear and Stop all pass.
+  - 60/60 tests.
+  - Bundle +3.7 KB gzip.
+- **Open:** Dream Pad CPU on phones; export true-peak headroom.
+
+### V3.3 — Download Beat (WAV export) (2026-11-24, ✅ built, ⏳ awaiting review, not committed)
+
+**What it does:** A DOWNLOAD button sits after REMIX / UNDO / CLEAR and opens a compact inline panel:
+- LENGTH 4 / 8 / 16 bars (default 8);
+- FORMAT WAV (16-bit PCM, stereo, 44.1 kHz);
+- DOWNLOAD WAV, with progress and a small Oil 6 pixel cassette.
+
+The file is rendered in the browser with `OfflineAudioContext`. Nothing is recorded from a device, and nothing is uploaded. Example name: `beatbit-neon-drive-112bpm-8bars.wav`.
+
+**What is exported:** the Sandbox state at the moment DOWNLOAD WAV is pressed:
+- kit;
+- the grid pattern, including manual edits and Remix;
+- BPM;
+- the kit's MAIN-section bass, chords, riff, leads and extra drums, with the kit's current sounds.
+
+Grid drums play at the kit's composed accents, or 0.85 for added steps, so every bar plays the same grid. That is exactly what live playback does. The shared rules now live in `src/audio/sandbox.ts`, used by both `useSequencer` and the export. There are no mute or volume settings in the app today. `BeatSnapshot.mainBars` is ready for V3.4's music Remix: when the hook owns remixed bars, it must pass them to both live playback and the export.
+
+**Render math:**
+- bar 1 starts at 0 s;
+- the music lasts `bars × 16 × 60/BPM/4`;
+- the tail is `max(2.5 s, 15 steps + 0.5 s)`: 2.5 s at ≥ 112 BPM, 4.25 s at 60 BPM. It covers the Dream Pad's 0.8 s release, the 1.8 s reverb and five dotted-8th echoes;
+- a hidden 50 ms pre-roll is rendered and trimmed off. Without it the master compressor starts unsettled and bar 1's downbeat came out 2.7 dB quieter than live;
+- no normalisation, dither or fade.
+
+**Files:**
+- `src/audio/export/`: `wav.ts` (the encoder, promoted from `src/dev/wav.ts`, which now re-exports it), `beatFile.ts` (timing and filename), `render.ts`, `download.ts`, plus 19 tests;
+- `src/audio/sandbox.ts`;
+- `src/components/ExportPanel.tsx` + `export.css`;
+- wiring in `TransportControls.tsx` and `App.tsx`.
+
+The render is scheduled one bar ahead through `suspend()` (real progress, small main-thread slices). Where `suspend()` is missing (Firefox), it schedules everything up front and shows "RENDERING…" with no bar. A render with missing bars throws rather than downloading. The object URL is revoked after 30 s.
+
+**Verification** [B] headless Chrome over CDP (real downloads to disk) · [T] unit tests · ffprobe / ffmpeg `ebur128` / `astats`
+
+| Check | Result |
+|---|---|
+| Valid WAV | ✅ All 21 downloaded files are `pcm_s16le`, stereo, 44.1 kHz, with 0 ffmpeg decode errors. |
+| Duration (expected = music + tail) | ✅ 0.000 ms error on every file:<br>• 60 BPM: 4 / 8 / 16 bars = 20.25 / 36.25 / 68.25 s<br>• 112 BPM: 4 / 8 / 16 bars = 11.07 / 19.65 / 36.79 s<br>• 180 BPM: 4 / 8 / 16 bars = 7.83 / 13.17 / 23.83 s<br>• PIXEL QUEST 132 BPM = 9.77 s · NIGHT SHIFT 124 BPM = 10.24 s · BOSS RUSH 150 BPM = 8.90 s |
+| Clipping / peaks / loudness | ✅ 0 clipped samples.<br>• Sample peak ≤ −1.7 dBFS.<br>• True peak −1.0 to −3.6 dBTP.<br>• −13.3 to −15.3 LUFS (NEON DRIVE −13.7 at 112 BPM). |
+| Tail (no cut notes) | ✅ The tail decays smoothly to ≤ −87 dBFS in the last 100 ms of every file (−180 dB = digital silence at 180 BPM). |
+| Export vs preview renderer (Sound Lab `renderBars`, same bars) | ✅ Per bar ≤ 0.02 dB, 5 ms envelope correlation 0.9975, both −13.8 LUFS. Per 16th: mean \|Δ\| 0.05 dB (random noise and reverb). |
+| Export vs live playback (output captured in the app) | ✅ Per bar ≤ 0.03 dB, envelope correlation 0.9994, per 16th mean \|Δ\| 0.04 dB. Bar 1 starts on the downbeat. |
+| Edits / Remix audible | ✅ Seeded `Math.random`, so the only difference between two downloads is the edit. Same state twice: ≤ −119 dBFS difference.<br>• Edit (kick 1 off, clap 3 on): the difference is −14 dBFS at kick 1 and −27 dBFS at clap 3, ≤ −100 dBFS elsewhere.<br>• Remix (kick 8→9, clap 5 added): −18 / −15 dBFS at the kicks and −31 dBFS at the clap, ≤ −82 dBFS on other steps (outside the hits and their decays). |
+| While playing / stopped | ✅ Both download.<br>• A 16-bar export while playing: the live capture across it shows every step present (per-step ≤ 0.3 dB vs the export). Playback continues; Stop works afterwards.<br>• 8-bar NEON DRIVE renders in 2.4–2.7 s in headless Chrome. |
+| Failure | ✅ A simulated `startRendering` failure shows an inline alert plus an announcement, and the cassette goes to its error state. No object URL is created. Retrying works. |
+| Keyboard / a11y | ✅ The flow works by keyboard:<br>• Tab to DOWNLOAD → Enter opens the panel (`aria-expanded`) and focuses the selected length (radio group "LENGTH").<br>• Arrow keys and Space change the length; Tab reaches DOWNLOAD WAV.<br>• Escape closes and returns focus to DOWNLOAD.<br>• Focus stays on the button while rendering (`aria-disabled`, not `disabled`). |
+| Reduced motion | ✅ The reels and the "saved" hop have `animation: none`; the label still changes. |
+| Mobile (emulated 320 / 375 / 390) | ✅ No horizontal overflow. DOWNLOAD WAV is full width, 44 px high; the length buttons are 40 px high. The export works. |
+| Firefox 160 (headless, WebDriver BiDi) | ⚠️ The export renders (no `suspend`, so the fallback path), and the WAV is valid with exact duration. It is 1 dB quieter than Chrome (snare/clap −4.5 dB). Firefox's preview renderer has the same offset (export vs preview ≤ 0.03 dB per bar), so this is an engine difference that live playback in Firefox shares, not an export bug. The UI download click itself was not driven in Firefox. |
+| Tests / lint / build | ✅ 95/95 tests (19 new). `tsc -b` is clean. Lint has 0 errors (pre-existing warnings only). Bundle: JS 401.7 KB (+10.0 KB, +3.2 KB gzip), CSS +1.6 KB. |
+
+**Open:**
+- Not tested: Safari / iOS (download UX, `suspend` support), a real phone, and VoiceOver.
+- Full-arrangement renders reach −0.1 dBTP (V3.2a). Exports of the main loop measured −1.0 dBTP at worst, so the mix is unchanged by design.
+- Edits made while a render runs don't affect that render (the snapshot is taken at click).
+- Live playback restarts the main section at bar 1 on every Play, and so does the export, whatever the playhead.
+
 ## How findings were verified
 
 | Tag | Meaning |

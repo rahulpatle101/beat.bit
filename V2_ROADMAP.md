@@ -326,13 +326,14 @@ Sandbox is the only visible mode. The Arcade is behind a disabled flag (code kep
 | **One expressive character** | An original pixel character, about 14×22 px, with headphones and a jacket in the kit's accent colour. Walks in place while the world scrolls (camera follows). About 24–30 frames total. | Every dance move fires on a **real drum hit**. Reduced motion: pose swaps only, no travel. |
 | **Groove-specific movement** | NEON DRIVE: a **funk strut** (head bob on kick, shoulder shimmy on accented hats, half spin on clap). PIXEL QUEST: a **hop-skip** (bounce on 8ths, jump on snare). NIGHT SHIFT: a **house shuffle** (steady walk, arm pump on offbeat hats, stop-and-point on the drop). BOSS RUSH: a **charge** (run cycle, power pose on crash, headbang on snare rolls). | Movement intensity follows note velocity (accents vs ghost notes) |
 | **Performers** | The four V2.1 performers become **world set-pieces** that recur as chunks scroll by (rooftop crowd, birds on wires, apartment residents). The character takes over the kick "stomp". **[Decision]** | Same timing rules as V2.1 |
-| **Rain + atmosphere** | Weather: clear / rain / fog. Rain is 1 px slanted streaks (capped at about 120). Hats brighten the rain briefly. Kicks splash puddles. A street-band **reflection** of lamps and signs (50% alpha, 1 px wobble on bass notes). | Reduced motion: rain is shown as static streaks, no wobble |
-| **Day / night** | Time of day: dawn · day · dusk · night. Palette ramps the sky, window-lit probability, and sign glow. Music energy (section loudness) brightens the city at night. | Text and UI tokens unchanged (only the scene changes). Contrast re-checked for the character on every palette. |
+| **Rain + atmosphere** | Weather: clear / rain / fog in Oil 6. Rain is 3 px slanted mauve streaks (capped at about 120), and hats turn about 1 in 6 to rose. Kicks put cream splashes on the street line. A street-band **reflection** of lamps and signs as broken dithered dashes on alternate rows (no alpha), with a 1 px wobble on bass notes. | Reduced motion: rain is shown as static streaks, no wobble |
+| **Day / night** | **Oil 6 light settings** (ART_DIRECTION.md → V3.2 Oil 6): Moonlit Night · Warm Sunset · Rainy Night · Soft Daylight. Each is a redistribution of the same six colours (no tints, no alpha, Bayer dither only). Music energy raises lit-window probability at night and thickens the haze in breakdowns. | Text and UI tokens unchanged (only the scene changes). Contrast re-checked for the character on every palette. |
 | **World randomization** | **WORLD** button → a seeded world `{time of day, weather, palette, skyline seed, foliage, signage set}` with a readable label ("RAINY NIGHT"). Undoable (the same history as Remix). Seeds are deterministic and ready for future sharing. | The live region announces the new world. The scene description updates (time, weather, character). |
 
 **Milestones:**
 | # | Deliverable | Acceptance highlights |
 |---|---|---|
+| V3.2-0 | **Oil 6 palette swap of today's 160×50 scene** (after approval): role tables from `src/scene/oil6.ts`, alpha → dither, sky/street rims, one light setting per kit | Colour census = 6 Oil 6 colours, 0 off-palette pixels. Readability ≥ 0.6 for every figure (ART_DIRECTION §4 method). Existing performer timing tests unchanged. |
 | V3.2a | Renderer foundation: 192×108 layers, tempo-locked scrolling, parallax, seeded chunks, perf budget | Scroll moves exactly N px per heard step (probe). p95 frame time within budget. Reduced motion = no scroll. Current performers still sync. |
 | V3.2b | Character + four groove styles | Each move fires only on its drum (canvas probe, as in V2.1). The kit switch changes style on the next step. Readable at phone size. |
 | V3.2c | Rain, reflections, day/night palettes | Rain responds to hats, splashes to kicks. All palettes pass the character/scene contrast check. Reduced-motion variants. |
@@ -343,6 +344,8 @@ Sandbox is the only visible mode. The Arcade is behind a disabled flag (code kep
 - Visual noise competing with the grid (hierarchy review at each step).
 - Low-end phone performance (pre-rendered tiles, particle caps).
 - Originality (no reference tracing).
+
+**Palette:** ✅ **Oil 6 by GrafxKid** replaces the SLSO-CLR17 proposal (2026-11-24; studies awaiting approval, see ART_DIRECTION.md → V3.2 Oil 6).
 
 **Decisions needed before V3.2:**
 1. Adopt the mockup layout (bigger scene; PLAY / REMIX / WORLD as three equal actions with PLAY primary)?

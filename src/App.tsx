@@ -24,6 +24,10 @@ const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'defau
 
 export default function App() {
   const seq = useSequencer()
+  // DEV-only handle for automated checks (stripped from production builds).
+  useEffect(() => {
+    if (import.meta.env.DEV) (window as unknown as { __seq: typeof seq }).__seq = seq
+  })
   // V3.1: the Arcade layer stays in the code but is hidden behind a disabled feature flag.
   // With the flag off nothing can start a challenge, so the hook stays idle (no listeners run).
   const arcade = useArcade(seq)
@@ -115,9 +119,18 @@ export default function App() {
               <TransportControls
                 playing={seq.playing}
                 bpm={seq.bpm}
+                pattern={seq.pattern}
                 kitId={seq.kitId}
                 unlocked={KITS.map((k) => k.id)}
-                edited={seq.edited}
+                // EDITED shows for grid edits AND remixed music (export labels it the same way).
+                edited={seq.modified}
+                music={seq.music}
+                modified={seq.modified}
+                remixSettings={seq.remixSettings}
+                remixUnavailable={seq.remixUnavailable}
+                lastSeed={seq.lastSeed}
+                onRemixSettings={seq.setRemixSettings}
+                onRestore={seq.restoreOriginal}
                 canUndo={seq.canUndo}
                 rollKey={roll.key}
                 rollSize={roll.size}
@@ -128,6 +141,7 @@ export default function App() {
                 onRemix={seq.remix}
                 onUndo={seq.undo}
                 onClear={seq.clear}
+                onAnnounce={seq.announce}
               />
             </CardContent>
           </Card>

@@ -11,10 +11,24 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { AudioEngine, type AudioStatus } from '@/audio/engine'
 import { playKitStep } from '@/audio/kitPlayer'
+import { sandboxDrumVel, sandboxLayerBar } from '@/audio/sandbox'
 import { Scheduler, stepDuration, type StepEvent } from '@/audio/scheduler'
 import { barPattern, barVel, kitById, kitGrid, section, type Bar, type KitId } from '@/data/kits'
 import { TRACK_IDS, clampBpm, clonePattern, emptyPattern, isEmpty, samePattern, type Pattern, type TrackId } from '@/data/patterns'
 import { remix as rollRemix, type Change } from '@/data/remix'
+import {
+  BAND_LABEL,
+  DEFAULT_PARTS,
+  DEFAULT_TEMPERATURE,
+  bandOf,
+  chordsRemixable,
+  cloneBars,
+  drumOptions,
+  originComposition,
+  partRng,
+  remixMusic,
+  type Part,
+} from '@/data/remixMusic'
 
 interface State {
   pattern: Pattern
@@ -45,13 +59,30 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-/** Undo history entry: the state before a remix, clear, or kit change. */
+/** Undo history entry: the complete state before a remix, clear, restore, or kit change. */
 interface Snapshot {
   pattern: Pattern
+  /** The kit's main bars as they were (V3.4 music Remix). */
+  music: Bar[]
   bpm: number
   kitId: KitId
   /** What replaced this state (for the undo announcement). */
-  by: 'remix' | 'clear' | 'kit'
+  by: 'remix' | 'clear' | 'kit' | 'restore'
+}
+
+/** V3.4 Remix settings. */
+export interface RemixSettings {
+  temperature: number
+  parts: Part[]
+}
+
+/** A change waiting for the next bar line while playing (drums + music switch together). */
+interface Pending {
+  pattern: Pattern
+  music: Bar[]
+  changes: Change[]
+  /** True for a Remix roll (drives the die + the grid's roll flash); false for undo/restore. */
+  roll: boolean
 }
 const HISTORY_LIMIT = 30
 
@@ -86,6 +117,18 @@ export interface Sequencer {
   kitId: KitId
   /** The pattern differs from the kit's composed grid. */
   edited: boolean
+  /** V3.4: the kit's main bars as currently played (melody/bass/chords after Remix). */
+  music: Bar[]
+  /** Anything (grid or music) differs from the kit's original. Enables RESTORE ORIGINAL. */
+  modified: boolean
+  remixSettings: RemixSettings
+  setRemixSettings: (s: RemixSettings) => void
+  /** Parts the current kit can't remix safely, with the reason. */
+  remixUnavailable: Partial<Record<Part, string>>
+  /** Seed of the last remix roll (null before the first). */
+  lastSeed: number | null
+  /** Back to the kit's composed grid and music (undoable). */
+  restoreOriginal: () => void
   canUndo: boolean
   playing: boolean
   /** 'sandbox' or 'arrangement' (Arcade). */
@@ -129,11 +172,19 @@ export function useSequencer(): Sequencer {
   const [mode, setMode] = useState<'sandbox' | 'arrangement'>('sandbox')
   const [audioStatus, setAudioStatus] = useState<AudioStatus>('locked')
   const [announcement, setAnnouncement] = useState('')
+  const [music, setMusic] = useState<Bar[]>(() => originComposition(kitById('neon-drive')))
+  const [remixSettings, setRemixSettingsState] = useState<RemixSettings>({ temperature: DEFAULT_TEMPERATURE, parts: DEFAULT_PARTS })
+  const [lastSeed, setLastSeed] = useState<number | null>(null)
 
   // The scheduler reads the latest values through refs, so edits never restart playback.
   const patternRef = useRef(state.pattern)
   const bpmRef = useRef(state.bpm)
   const kitRef = useRef<KitId>(state.kitId)
+  /** The main bars the scheduler plays (applied state). */
+  const musicRef = useRef<Bar[]>(music)
+  /** A remix/undo/restore waiting for the next bar line (while playing). */
+  const pendingRef = useRef<Pending | null>(null)
+  const remixSettingsRef = useRef(remixSettings)
   useEffect(() => {
     patternRef.current = state.pattern
   }, [state.pattern])
@@ -184,9 +235,52 @@ export function useSequencer(): Sequencer {
     for (const fn of cueListeners.current) fn(cue)
   }, [])
 
+  /** A bar-line change whose audio is already scheduled; shown when its downbeat is HEARD. */
+  const visualRef = useRef<{ p: Pending; at: number } | null>(null)
+
+  /** Publish a change to React + listeners (grid, die, roll flash). */
+  const showNow = useCallback((p: Pending) => {
+    dispatch({ type: 'set', pattern: p.pattern, bpm: bpmRef.current, kitId: kitRef.current })
+    setMusic(p.music)
+    if (p.roll) for (const fn of remixListeners.current) fn(p.changes)
+  }, [])
+
+  /** Make a pattern + music the playing state now (refs first, then React, then listeners). */
+  const applyNow = useCallback(
+    (p: Pending) => {
+      visualRef.current = null
+      patternRef.current = p.pattern
+      musicRef.current = p.music
+      showNow(p)
+    },
+    [showNow],
+  )
+
+  /** The latest intended state (a pending change counts as already made). */
+  const latest = useCallback((): { pattern: Pattern; music: Bar[] } => pendingRef.current ?? { pattern: patternRef.current, music: musicRef.current }, [])
+  // (patternRef/musicRef already hold a change that is only waiting to be shown.)
+
+  /** While playing, hold the change for the next bar line; otherwise apply it now. Returns true if deferred. */
+  const commit = useCallback(
+    (p: Pending): boolean => {
+      if (schedulerRef.current?.running && !arrangementRef.current) {
+        pendingRef.current = p
+        return true
+      }
+      pendingRef.current = null
+      applyNow(p)
+      return false
+    },
+    [applyNow],
+  )
+
   const stopInternal = useCallback(
     (reason?: string) => {
       intentRef.current++
+      // A change waiting for the bar line lands immediately when playback stops.
+      const pend = pendingRef.current ?? visualRef.current?.p ?? null
+      pendingRef.current = null
+      if (pend) applyNow(pend)
       if (endTimerRef.current) clearTimeout(endTimerRef.current)
       endTimerRef.current = null
       const sched = schedulerRef.current
@@ -200,7 +294,7 @@ export function useSequencer(): Sequencer {
         announce(reason ?? 'Stopped')
       }
     },
-    [announce, emitTransport],
+    [announce, emitTransport, applyNow],
   )
 
   // Engine, scheduler, render loop, and lifecycle. Created in an effect so React StrictMode's
@@ -223,7 +317,7 @@ export function useSequencer(): Sequencer {
       trigger: (track, time, step, bar) => {
         if (!audible()) return
         const arr = arrangementRef.current
-        const vel = arr ? barVel(arr.bars[bar], track, step) : kitGrid(kitById(kitRef.current)).accents[track][step] || 0.85
+        const vel = arr ? barVel(arr.bars[bar], track, step) : sandboxDrumVel(kitById(kitRef.current), track, step)
         engine.trigger(track, time, vel)
       },
       getBpm: () => bpmRef.current,
@@ -231,11 +325,21 @@ export function useSequencer(): Sequencer {
       onStepScheduled: (bar, step, time, stepSec) => {
         const arr = arrangementRef.current
         const kit = kitById(arr?.kitId ?? kitRef.current)
-        const main = section(kit, 'main')
-        const layerBar = arr ? arr.bars[bar] : main[bar % main.length]
+        const layerBar = arr ? arr.bars[bar] : sandboxLayerBar(kit, bar, musicRef.current)
         const v = audible() ? engine.voices() : null
         if (v && layerBar) playKitStep(v, kit, layerBar, step, time, stepSec)
         arr?.onScheduled?.(bar, step, time, stepSec)
+        // V3.4: a pending remix/undo lands on the bar line: everything from the next step 1 on
+        // (drums, melody, bass, chords) reads the new state together. Notes already scheduled
+        // finish on their own envelopes, so nothing is cut or left hanging.
+        if (!arr && step === 15 && pendingRef.current) {
+          const p = pendingRef.current
+          pendingRef.current = null
+          // Audio: from the next step on (refs). Visuals: when that downbeat is heard (render loop).
+          patternRef.current = p.pattern
+          musicRef.current = p.music
+          visualRef.current = { p, at: time + stepSec }
+        }
       },
       getBarCount: () => arrangementRef.current?.bars.length ?? null,
     })
@@ -267,6 +371,11 @@ export function useSequencer(): Sequencer {
         const usingAudio = clockRef.current !== silentClock
         const heardAt = clockRef.current() - (usingAudio ? engine.outputLatency() : 0)
         const events = scheduler.drain(heardAt)
+        const vis = visualRef.current
+        if (vis && heardAt >= vis.at) {
+          visualRef.current = null
+          showNow(vis.p)
+        }
         for (const ev of events) {
           for (const fn of stepListeners.current) fn(ev, now)
           // Arrangement end: after the last step is heard, let the tail ring out, then stop.
@@ -310,7 +419,7 @@ export function useSequencer(): Sequencer {
       engineRef.current = null
       schedulerRef.current = null
     }
-  }, [stopInternal, emitTransport, announce])
+  }, [stopInternal, emitTransport, announce, showNow])
 
   const play = useCallback(async () => {
     const engine = engineRef.current
@@ -384,6 +493,20 @@ export function useSequencer(): Sequencer {
       const wasEmpty = isEmpty(patternRef.current)
       remixOriginRef.current = null // a manual edit starts a new remix identity
       dispatch({ type: 'toggle', track, step })
+      // A remix waiting for the bar line keeps this edit too.
+      const flip = (pt: Pattern): Pattern => {
+        const row = [...pt[track]]
+        row[step] = !row[step]
+        return { ...pt, [track]: row }
+      }
+      const pend = pendingRef.current
+      if (pend) pendingRef.current = { ...pend, pattern: flip(pend.pattern) }
+      const vis = visualRef.current
+      if (vis) {
+        // Already playing, not yet shown: edit the playing pattern and the one about to be shown.
+        patternRef.current = flip(patternRef.current)
+        visualRef.current = { ...vis, p: { ...vis.p, pattern: patternRef.current } }
+      }
       // First note after an empty pattern: the scene's lights return (after a blackout).
       if (turningOn && wasEmpty) emitCue('non-empty')
       // Audition while stopped, on toggle-on only (DESIGN.md §7.1).
@@ -392,7 +515,7 @@ export function useSequencer(): Sequencer {
         void engine.unlock().then((ok) => {
           if (!ok || schedulerRef.current?.running) return
           const time = engine.now() + 0.005
-          engine.trigger(track, time, kitGrid(kitById(kitRef.current)).accents[track][step] || 0.85)
+          engine.trigger(track, time, sandboxDrumVel(kitById(kitRef.current), track, step))
           auditionQueue.current.push({ track, time, stepMs: stepDuration(bpmRef.current) * 1000 })
         })
       }
@@ -403,70 +526,122 @@ export function useSequencer(): Sequencer {
   /** Record the current state so Undo can restore it. */
   const pushHistory = useCallback((by: Snapshot['by']) => {
     const h = historyRef.current
-    h.push({ pattern: clonePattern(patternRef.current), bpm: bpmRef.current, kitId: kitRef.current, by })
+    const cur = latest()
+    h.push({ pattern: clonePattern(cur.pattern), music: cloneBars(cur.music), bpm: bpmRef.current, kitId: kitRef.current, by })
     if (h.length > HISTORY_LIMIT) h.shift()
     setCanUndo(true)
-  }, [])
+  }, [latest])
 
   /** Apply a whole-pattern change now (refs first, so the scheduler and rapid presses see it). */
-  const setAll = useCallback((pattern: Pattern, bpm: number, kitId: KitId) => {
+  const setAll = useCallback((pattern: Pattern, bpm: number, kitId: KitId, bars: Bar[]) => {
+    pendingRef.current = null
     patternRef.current = pattern
+    musicRef.current = bars
     bpmRef.current = clampBpm(bpm)
     kitRef.current = kitId
     engineRef.current?.setTempo(stepDuration(bpmRef.current))
     dispatch({ type: 'set', pattern, bpm, kitId })
+    setMusic(bars)
   }, [])
 
   const clear = useCallback(() => {
-    if (arrangementRef.current || isEmpty(patternRef.current)) return
+    if (arrangementRef.current || isEmpty(latest().pattern)) return
     pushHistory('clear')
     remixOriginRef.current = null
+    // Clear empties the drum grid only (melody/bass keep playing); it applies immediately.
+    const keepMusic = latest().music
+    pendingRef.current = null
     patternRef.current = emptyPattern()
+    musicRef.current = keepMusic
+    setMusic(keepMusic)
     dispatch({ type: 'clear' })
     emitCue('cleared')
     announce('Pattern cleared. Undo available.')
-  }, [announce, emitCue, pushHistory])
+  }, [announce, emitCue, pushHistory, latest])
 
   const loadKit = useCallback(
     (id: KitId) => {
       if (arrangementRef.current) return
       const k = kitById(id)
       const grid = kitGrid(k).pattern
-      const unchanged = kitRef.current === id && bpmRef.current === k.bpm && samePattern(patternRef.current, grid)
+      const cur = latest()
+      const unchanged = kitRef.current === id && bpmRef.current === k.bpm && samePattern(cur.pattern, grid) && sameBars(cur.music, originComposition(k))
       if (!unchanged) pushHistory('kit')
       remixOriginRef.current = null
-      setAll(clonePattern(grid), k.bpm, k.id)
+      setAll(clonePattern(grid), k.bpm, k.id, originComposition(k))
       emitCue('groove')
       announce(`${k.name} loaded, ${k.bpm} BPM`)
     },
-    [announce, emitCue, pushHistory, setAll],
+    [announce, emitCue, pushHistory, setAll, latest],
   )
 
   const remix = useCallback(() => {
     if (arrangementRef.current) return
-    const current = patternRef.current
-    const origin = remixOriginRef.current ?? current
-    const { pattern, changes } = rollRemix(current, origin)
+    const { temperature, parts } = remixSettingsRef.current
+    const kit = kitById(kitRef.current)
+    const cur = latest()
+    // One seed per roll; every part derives its own stream from it (same seed → same result).
+    const seed = (Math.random() * 2 ** 32) >>> 0
+    let pattern = cur.pattern
+    let changes: Change[] = []
+    if (parts.includes('drums')) {
+      // Drum identity: the pattern this run of remixes started from (keeps manual edits).
+      const origin = remixOriginRef.current ?? cur.pattern
+      const r = rollRemix(cur.pattern, origin, partRng(seed, 'drums'), drumOptions(temperature))
+      pattern = r.pattern
+      changes = r.changes
+      remixOriginRef.current = isEmpty(cur.pattern) ? pattern : origin
+    }
+    const res = remixMusic({ kit, origin: originComposition(kit), current: cur.music, kick: pattern.kick, seed, temperature, parts })
     pushHistory('remix')
-    remixOriginRef.current = isEmpty(current) ? pattern : origin
-    setAll(pattern, bpmRef.current, kitRef.current)
-    for (const fn of remixListeners.current) fn(changes)
-    if (isEmpty(current)) emitCue('non-empty')
-    announce(`Remixed: ${changes.length} changes. Undo available.`)
-  }, [announce, emitCue, pushHistory, setAll])
+    const deferred = commit({ pattern, music: res.bars, changes, roll: true })
+    setLastSeed(seed)
+    if (isEmpty(cur.pattern) && !isEmpty(pattern)) emitCue('non-empty')
+    const summary = [
+      parts.includes('drums') && `drums ${changes.length}`,
+      parts.includes('melody') && `melody ${res.changed.melody}`,
+      parts.includes('bass') && `bass ${res.changed.bass}`,
+      parts.includes('chords') && chordsRemixable(originComposition(kit)) && `chords ${res.changed.chords}`,
+    ]
+      .filter(Boolean)
+      .join(', ')
+    announce(`Remixed, ${BAND_LABEL[bandOf(temperature)].toLowerCase()}: ${summary}.${deferred ? ' Lands on the next bar.' : ''} Undo available.`)
+  }, [announce, emitCue, pushHistory, commit, latest])
+
+  const restoreOriginal = useCallback(() => {
+    if (arrangementRef.current) return
+    const kit = kitById(kitRef.current)
+    const grid = clonePattern(kitGrid(kit).pattern)
+    const cur = latest()
+    if (samePattern(cur.pattern, grid) && sameBars(cur.music, originComposition(kit))) return
+    pushHistory('restore')
+    remixOriginRef.current = null
+    const deferred = commit({ pattern: grid, music: originComposition(kit), changes: [], roll: false })
+    if (isEmpty(cur.pattern)) emitCue('non-empty')
+    announce(`${kit.name} restored to the original.${deferred ? ' Lands on the next bar.' : ''} Undo available.`)
+  }, [announce, emitCue, pushHistory, commit, latest])
 
   const undo = useCallback(() => {
     if (arrangementRef.current) return
     const snap = historyRef.current.pop()
     setCanUndo(historyRef.current.length > 0)
     if (!snap) return
-    const wasEmpty = isEmpty(patternRef.current)
+    const wasEmpty = isEmpty(latest().pattern)
     remixOriginRef.current = null
-    setAll(snap.pattern, snap.bpm, snap.kitId)
+    let deferred = false
+    if (snap.kitId === kitRef.current && snap.bpm === bpmRef.current) {
+      // Same kit and tempo: the exact previous pattern + music, on the next bar line while playing.
+      deferred = commit({ pattern: clonePattern(snap.pattern), music: cloneBars(snap.music), changes: [], roll: false })
+    } else setAll(clonePattern(snap.pattern), snap.bpm, snap.kitId, cloneBars(snap.music))
     if (wasEmpty && !isEmpty(snap.pattern)) emitCue('non-empty')
-    const what = { remix: 'remix', clear: 'clear', kit: 'kit change' }[snap.by]
-    announce(`Undid ${what}. ${kitById(snap.kitId).name}, ${snap.bpm} BPM`)
-  }, [announce, emitCue, setAll])
+    const what = { remix: 'remix', clear: 'clear', kit: 'kit change', restore: 'restore' }[snap.by]
+    announce(`Undid ${what}. ${kitById(snap.kitId).name}, ${snap.bpm} BPM${deferred ? '. Lands on the next bar.' : ''}`)
+  }, [announce, emitCue, setAll, commit, latest])
+
+  const setRemixSettings = useCallback((s: RemixSettings) => {
+    remixSettingsRef.current = s
+    setRemixSettingsState(s)
+  }, [])
 
   const setBpm = useCallback((bpm: number) => dispatch({ type: 'bpm', bpm }), [])
 
@@ -485,12 +660,24 @@ export function useSequencer(): Sequencer {
   const onRemix = useCallback(listen(remixListeners), [])
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  const edited = !samePattern(kitGrid(kitById(state.kitId)).pattern, state.pattern)
+  const kitNow = kitById(state.kitId)
+  const edited = !samePattern(kitGrid(kitNow).pattern, state.pattern)
+  const modified = edited || !sameBars(music, originComposition(kitNow))
+  const remixUnavailable: Partial<Record<Part, string>> = chordsRemixable(section(kitNow, 'main'))
+    ? {}
+    : { chords: `${kitNow.name} sustains its chords; only stab chords are remixed` }
 
   return {
     pattern: state.pattern,
     kitId: state.kitId,
     edited,
+    music,
+    modified,
+    remixSettings,
+    setRemixSettings,
+    remixUnavailable,
+    lastSeed,
+    restoreOriginal,
     canUndo,
     bpm: state.bpm,
     playing,
@@ -518,6 +705,9 @@ export function useSequencer(): Sequencer {
     onRemix,
   }
 }
+
+/** Structural equality for composition bars (small arrays; JSON is exact for this data). */
+const sameBars = (a: Bar[], b: Bar[]) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Fallback clock used when audio is blocked, so visuals still run (DESIGN.md §7.4). */
 const silentClock = () => performance.now() / 1000

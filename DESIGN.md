@@ -591,3 +591,22 @@ Tab order: PLAY → Tempo → **Groove picker** (one stop; ←/→ move, Enter/S
 - [x] Performers on the exact drum steps with 0-frame lag. Reduced motion keeps reactions without movement.
 - [x] Focus ring on every control. Tab order starts at PLAY. Grid keyboard unchanged.
 - [x] No horizontal overflow at 320 / 375 / 390 px.
+
+---
+
+## V3.3 — Download Beat (WAV export)
+
+- **Where:** DOWNLOAD (outline Button, pixel arrow) after REMIX / UNDO / CLEAR. It opens an inline panel in the transport card. The panel is a disclosure, not a modal: `aria-expanded` / `aria-controls`, focus moves to the selected length, and Escape closes it and returns focus to DOWNLOAD.
+- **Panel:**
+  - LENGTH 4 / 8 / 16 bars (8bitcn Toggle Group, default 8);
+  - FORMAT WAV (16-bit PCM, stereo, 44.1 kHz);
+  - a one-line summary (kit, edited flag, BPM, bars, duration with tail);
+  - DOWNLOAD WAV (primary Button, full width on phones);
+  - progress (8bitcn Progress, retro) or "SAVED <filename>", or an inline error (`role=alert`). Each is also announced in the live region.
+- **Cassette:** a 24×15 pixel cassette in the Oil 6 palette (only here for now). While rendering, its reel spokes swap frames every 250 ms; on save it does one small hop. Under `prefers-reduced-motion` it stays static.
+- **Contract:**
+  - The export renders what Sandbox plays, from bar 1 of the main section, whatever the playhead position: same voices, mix and master chain, offline.
+  - The beat is captured when DOWNLOAD WAV is pressed.
+  - The tail is max(2.5 s, 15 steps + 0.5 s).
+  - The mix is not normalised.
+  - Filename: `beatbit-<kit>-<bpm>bpm-<bars>bars.wav`.

@@ -99,6 +99,7 @@
     --panel: #16181e;
     --cell: #22252d;
     --cell-alt: #1c1f26;
+    --cell-edge: #646872; /* off-step boundary, 3.07:1 vs --panel (WCAG 1.4.11) */
     --ink: #e6e1d3;
     --ink-dim: #8a8d96;
     --kick: #e8615a;

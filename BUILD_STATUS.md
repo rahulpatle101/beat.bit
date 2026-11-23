@@ -1,7 +1,31 @@
 # BEAT.BIT — Build Status (V1 Audit)
 
 **Audited:** 2026-11-23 · **Commit:** `97252ff` (main) · **Auditor:** Claude, with automated checks
-**Scope:** The implementation as shipped. This document records findings only; nothing was changed during the audit.
+**Scope:** The implementation as shipped. The audit (§1–§8) records findings at `97252ff`. Later phases are logged in the **Phase log** directly below.
+
+## Phase log
+
+### Phase 0 — Stabilization (2026-11-23)
+
+| Defect | Change | Verification | Result |
+|---|---|---|---|
+| **D1** Invisible focus on 8bitcn Button/Slider | Local patches: square 2px `--ink` outline, offset 8px on Button (outside the pixel frame) and 4px on the Slider thumb. Comments in both files. | [B] Real Tab presses: PLAY, Tempo, GROOVE → `:focus-visible`, `outline: solid 2px`. Screenshots show the ring. | ✅ Fixed |
+| **D2** Off-step contrast 1.16:1 | New token `--cell-edge: #646872`, a 2px inset edge on off steps (on steps use the track color, hover uses `--ink-dim`) | [C] 3.07:1 against `--panel`. [B] Screenshot. | ✅ Fixed |
+| **D3** Silent-mode clock mismatch | `trigger` is gated to the audio clock. A late `running` state during silent playback restarts the loop on the audio clock and announces "Sound started…". | [R] Code review. [B] The blocked/silent path still works (badge, notice, playhead). **Not reproducible in Chrome:** a later trusted click doesn't complete a pending `resume()`, so the late-unlock branch is untested. | ✅ Fixed (branch unexercised) |
+| **D4** Stop button corner artifacts | Stop uses the `outline` variant with a solid `--cell` fill instead of `secondary` | [B] Screenshot while playing | ✅ Fixed |
+| **D7** Template leftovers | Pixel favicon (four track-color squares). Unused `public/icons.svg` removed. | [R] No references remain | ✅ Fixed |
+| **D8** Two render loops | One rAF loop in `useSequencer`: step events, then `onFrame` renderers. Step listeners receive the frame timestamp, so scene event times share the draw timebase. | [B] Canvas probe: skyline drop on **exactly** kick steps 0/6/8/13 (the one-frame spillover is gone) | ✅ Fixed |
+| D5 Mobile cell size | Deferred to V2.4, as planned | — | Open |
+| D6 1× narrow scene | Accepted (documented limitation) | — | Accepted |
+
+**Regression checks after Phase 0** [B][T]:
+- 8/8 unit tests pass.
+- 104 BPM: mean 144.11 ms vs 144.23, steps in order.
+- 104→180 mid-play: 83.48 ms vs 83.33.
+- 21 rapid clicks from playing: stopped, 0 steps after, 0 lit.
+- Keyboard: one tabbable cell, ↓ moves to "Snare, step 1".
+- Reduced motion: no skyline drop.
+- No console errors.
 
 ## How findings were verified
 
@@ -25,7 +49,7 @@
 | Reactive scene (Signal City) | ✅ Working and synced to scheduled notes |
 | Autoplay / blocked / tab-hidden handling | ✅ Working |
 | Responsive layout | ✅ No overflow 320–1280px. ⚠️ Mobile cells below the 36px target |
-| Accessibility | ⚠️ **Two WCAG failures** (focus visibility, non-text contrast). VoiceOver untested. |
+| Accessibility | ⚠️ **Two WCAG failures** (focus visibility, non-text contrast). VoiceOver untested. → **Both fixed in Phase 0.** VoiceOver still untested. |
 | 8bitcn integration | ✅ Six real components in use, two patched locally |
 | Publishing (README, deploy, recording, post) | ❌ Not started |
 

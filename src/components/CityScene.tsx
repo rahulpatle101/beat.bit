@@ -1,17 +1,19 @@
-// React shell for the Signal City canvas: sizing, subscriptions, and the draw loop.
+// React shell for the Signal City canvas: sizing and subscriptions. Drawing happens in the
+// sequencer's single render loop via onFrame.
 // The canvas is decorative (aria-hidden); the live region and grid carry the information.
 
 import { useEffect, useRef, useState } from 'react'
 import { CityScene as Scene, H, W, readPalette } from '@/scene/city'
-import type { StepListener, TransportListener } from '@/hooks/useSequencer'
+import type { FrameListener, StepListener, TransportListener } from '@/hooks/useSequencer'
 
 interface Props {
   playing: boolean
   onStep: (fn: StepListener) => () => void
   onTransport: (fn: TransportListener) => () => void
+  onFrame: (fn: FrameListener) => () => void
 }
 
-export function CityScene({ playing, onStep, onTransport }: Props) {
+export function CityScene({ playing, onStep, onTransport, onFrame }: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<Scene | null>(null)
@@ -45,29 +47,25 @@ export function CityScene({ playing, onStep, onTransport }: Props) {
     syncMotion()
     mq.addEventListener('change', syncMotion)
 
-    const offStep = onStep((ev) => {
-      scene.step(ev.step, ev.tracks, ev.duration * 1000, performance.now())
+    const offStep = onStep((ev, frameTime) => {
+      scene.step(ev.step, ev.tracks, ev.duration * 1000, frameTime)
     })
     const offTransport = onTransport((on) => {
       scene.playing = on
       if (!on) scene.stop()
     })
 
-    let raf = 0
-    const loop = (now: number) => {
-      scene.draw(now)
-      raf = requestAnimationFrame(loop)
-    }
-    raf = requestAnimationFrame(loop)
+    // Draw from the sequencer's single render loop (no second rAF).
+    const offFrame = onFrame((now) => scene.draw(now))
 
     return () => {
-      cancelAnimationFrame(raf)
+      offFrame()
       offStep()
       offTransport()
       mq.removeEventListener('change', syncMotion)
       sceneRef.current = null
     }
-  }, [onStep, onTransport])
+  }, [onStep, onTransport, onFrame])
 
   return (
     <div ref={boxRef} className="flex w-full justify-center bg-void" aria-hidden="true">

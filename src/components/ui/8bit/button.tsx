@@ -7,6 +7,14 @@ import { cn } from "@/lib/utils";
 
 import "@/components/ui/8bit/styles/retro.css";
 
+/*
+ * BEAT.BIT patch (BUILD_STATUS D1, WCAG 2.4.7): upstream relies on the shadcn focus ring,
+ * which is effectively invisible against the pixel border. A square 2px ink outline sits
+ * outside the 6px pixel frame (offset 8px) so keyboard focus is always visible.
+ */
+const focusRing =
+  "focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-8 focus-visible:ring-0";
+
 export const buttonVariants = cva("", {
   variants: {
     font: {
@@ -110,6 +118,7 @@ function Button({
       {...props}
       className={cn(
         "rounded-none active:translate-y-1 transition-transform relative inline-flex items-center justify-center gap-1.5 border-none",
+        focusRing,
         size === "icon" && "mx-1 my-0",
         font !== "normal" && "retro",
         className

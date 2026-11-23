@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/8bit/button'
 import { Slider } from '@/components/ui/8bit/slider'
 import { BPM_MAX, BPM_MIN } from '@/data/patterns'
+import { cn } from '@/lib/utils'
 
 interface Props {
   playing: boolean
@@ -44,8 +45,10 @@ export function TransportControls({
     <div className="flex flex-wrap items-center gap-x-8 gap-y-6">
       <Button
         size="lg"
-        variant={playing ? 'secondary' : 'default'}
-        className="h-12 w-40 text-sm"
+        // Stop: outline variant with a solid fill. The 8bitcn `secondary` variant draws
+        // translucent shadow strips that read as stray corner pixels (BUILD_STATUS D4).
+        variant={playing ? 'outline' : 'default'}
+        className={cn('h-12 w-40 text-sm', playing && 'bg-cell text-ink dark:bg-cell')}
         onClick={playing ? () => onStop() : onPlay}
       >
         <PixelIcon kind={playing ? 'stop' : 'play'} />

@@ -61,6 +61,9 @@
   --c: var(--ink);
   --bevel-hi: rgb(255 255 255 / 0.05);
   --bevel-lo: rgb(0 0 0 / 0.38);
+  /* Off-step boundary (BUILD_STATUS D2): ≥3:1 against the panel so empty steps are
+     identifiable as controls (WCAG 1.4.11). On-steps use their track fill instead. */
+  --edge: var(--cell-edge);
 
   grid-row: var(--rd);
   grid-column: var(--cd);
@@ -75,6 +78,7 @@
   background: var(--cell);
   color: transparent;
   box-shadow:
+    inset 0 0 0 2px var(--edge),
     inset 4px 4px 0 var(--bevel-hi),
     inset -4px -4px 0 var(--bevel-lo);
   cursor: pointer;
@@ -99,10 +103,7 @@
 /* Off + hover: border brightens; a faint glyph previews what you'll place. */
 @media (hover: hover) {
   .seq-cell:hover {
-    box-shadow:
-      inset 0 0 0 2px var(--ink-dim),
-      inset 4px 4px 0 var(--bevel-hi),
-      inset -4px -4px 0 var(--bevel-lo);
+    --edge: var(--ink-dim);
     color: color-mix(in srgb, var(--c) 35%, transparent);
   }
   .seq-cell[aria-pressed='true']:hover {
@@ -113,6 +114,7 @@
 
 /* On: track color fill with the glyph knocked out (state is never color-only). */
 .seq-cell[aria-pressed='true'] {
+  --edge: var(--c);
   --bevel-hi: rgb(255 255 255 / 0.28);
   --bevel-lo: rgb(0 0 0 / 0.28);
   background: var(--c);
@@ -123,6 +125,7 @@
 .seq-cell:active {
   transform: translate(2px, 2px);
   box-shadow:
+    inset 0 0 0 2px var(--edge),
     inset 4px 4px 0 var(--bevel-lo),
     inset -4px -4px 0 var(--bevel-hi);
 }

@@ -7,6 +7,9 @@
  * 2. Forward `thumbProps` to the Thumb. Radix places role="slider" on the Thumb,
  *    so aria-label / aria-valuetext must go there to be announced.
  * 3. Apply `className` to the outer wrapper only (upstream applied it twice).
+ * 4. Visible keyboard focus on the Thumb (BUILD_STATUS D1, WCAG 2.4.7): upstream sets
+ *    `focus-visible:outline-none ring-0`, leaving no indicator. A square 2px ink outline
+ *    at offset 4px clears the slider's own pixel frame.
  */
 
 import * as React from "react";
@@ -38,7 +41,7 @@ const Slider = React.forwardRef<
       <SliderPrimitive.Thumb
         {...thumbProps}
         className={cn(
-          "block size-5 border-2 border-foreground dark:border-ring bg-foreground dark:bg-ring ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50",
+          "block size-5 border-2 border-foreground dark:border-ring bg-foreground dark:bg-ring ring-offset-background transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-4 focus-visible:ring-0 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50",
           thumbProps?.className
         )}
       />

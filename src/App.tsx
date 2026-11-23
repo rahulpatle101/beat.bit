@@ -33,7 +33,12 @@ export default function App() {
       <main className="flex flex-col gap-8">
         <Card className="gap-0 py-0">
           <CardContent className="p-0">
-            <CityScene playing={seq.playing} onStep={seq.onStep} onTransport={seq.onTransport} />
+            <CityScene
+              playing={seq.playing}
+              onStep={seq.onStep}
+              onTransport={seq.onTransport}
+              onFrame={seq.onFrame}
+            />
           </CardContent>
         </Card>
 

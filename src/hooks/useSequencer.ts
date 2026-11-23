@@ -41,8 +41,11 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export type StepListener = (e: StepEvent) => void
+/** `frameTime` is the rAF timestamp of the frame publishing the step (same timebase as FrameListener). */
+export type StepListener = (e: StepEvent, frameTime: number) => void
 export type TransportListener = (playing: boolean) => void
+/** Called once per animation frame, after that frame's step events (rAF timestamp, ms). */
+export type FrameListener = (now: number) => void
 
 export interface Sequencer {
   pattern: Pattern
@@ -61,6 +64,11 @@ export interface Sequencer {
   onStep: (fn: StepListener) => () => void
   /** Called whenever the transport starts or stops. */
   onTransport: (fn: TransportListener) => () => void
+  /**
+   * Called every animation frame from the single render loop, after step events are
+   * published. Renderers draw here so the grid and scene never disagree by a frame.
+   */
+  onFrame: (fn: FrameListener) => () => void
 }
 
 export function useSequencer(): Sequencer {
@@ -90,6 +98,7 @@ export function useSequencer(): Sequencer {
   const intentRef = useRef(0)
   const stepListeners = useRef(new Set<StepListener>())
   const transportListeners = useRef(new Set<TransportListener>())
+  const frameListeners = useRef(new Set<FrameListener>())
 
   const announce = useCallback((msg: string) => {
     // Re-announce identical messages by toggling a zero-width suffix.
@@ -121,7 +130,11 @@ export function useSequencer(): Sequencer {
     const engine = new AudioEngine()
     const scheduler = new Scheduler({
       now: () => clockRef.current(),
-      trigger: (track, time) => engine.trigger(track, time),
+      // Only the audio clock may schedule sound. In silent mode the times come from
+      // performance.now() and must never reach the AudioContext (BUILD_STATUS D3).
+      trigger: (track, time) => {
+        if (clockRef.current !== silentClock) engine.trigger(track, time)
+      },
       getPattern: () => patternRef.current,
       getBpm: () => bpmRef.current,
     })
@@ -134,16 +147,29 @@ export function useSequencer(): Sequencer {
       if (s === 'blocked' && scheduler.running && clockRef.current !== silentClock) {
         stopInternal('Stopped: sound was interrupted')
       }
+      // Late unlock (BUILD_STATUS D3): the context started running after we fell back to
+      // silent mode. Restart the loop on the audio clock so sound and visuals share one clock.
+      if (s === 'running' && scheduler.running && clockRef.current === silentClock) {
+        scheduler.stop()
+        emitTransport(false)
+        clockRef.current = () => engine.now()
+        scheduler.start()
+        emitTransport(true)
+        announce(`Sound started. Playing at ${bpmRef.current} BPM`)
+      }
     })
 
+    // The single render loop (BUILD_STATUS D8): publish the steps that are now audible,
+    // then let every renderer draw the same frame.
     let raf = 0
-    const loop = () => {
+    const loop = (now: number) => {
       if (scheduler.running) {
         const usingAudio = clockRef.current !== silentClock
         const heardAt = clockRef.current() - (usingAudio ? engine.outputLatency() : 0)
         const events = scheduler.drain(heardAt)
-        for (const ev of events) for (const fn of stepListeners.current) fn(ev)
+        for (const ev of events) for (const fn of stepListeners.current) fn(ev, now)
       }
+      for (const fn of frameListeners.current) fn(now)
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
@@ -162,7 +188,7 @@ export function useSequencer(): Sequencer {
       engineRef.current = null
       schedulerRef.current = null
     }
-  }, [stopInternal])
+  }, [stopInternal, emitTransport, announce])
 
   const play = useCallback(async () => {
     const engine = engineRef.current
@@ -226,6 +252,13 @@ export function useSequencer(): Sequencer {
     }
   }, [])
 
+  const onFrame = useCallback((fn: FrameListener) => {
+    frameListeners.current.add(fn)
+    return () => {
+      frameListeners.current.delete(fn)
+    }
+  }, [])
+
   return {
     pattern: state.pattern,
     bpm: state.bpm,
@@ -240,6 +273,7 @@ export function useSequencer(): Sequencer {
     setBpm,
     onStep,
     onTransport,
+    onFrame,
   }
 }
 

@@ -1,10 +1,10 @@
-// DEV-ONLY composed preview kits for MUSIC_DIRECTION.md. Every melody here is original.
+// Composed kits (MUSIC_DIRECTION.md §3). Every melody here is original.
 // Notation:
 //   drums: 16-char strings per instrument per bar: 'x' = 1.0, 'o' = 0.65, '-' = 0.35, '.' = rest
 //   lines: "step NOTE len [vel]" comma-separated (steps 0–15, len in 16ths), e.g. "0 E2 2, 3 E3 1 .7"
 //   chords: "step N1.N2.N3 len [vel]"
 
-import type { BassPreset, ChordPreset, LeadPreset } from './synths'
+import type { BassPreset, ChordPreset, LeadPreset } from '@/audio/instruments'
 
 export type DrumKey = 'kick' | 'snare' | 'hat' | 'clap' | 'ohat' | 'crash' | 'shaker'
 export interface Note {

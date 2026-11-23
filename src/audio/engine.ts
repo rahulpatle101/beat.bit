@@ -3,8 +3,9 @@
 
 import type { TrackId } from '@/data/patterns'
 import { createMasterChain } from './chain'
+import { createMix, drum, setDelayTempo, type Mix } from './instruments'
 import { playLead } from './lead'
-import { VOICES, createNoiseBuffer } from './voices'
+import { createNoiseBuffer } from './voices'
 
 export type AudioStatus = 'locked' | 'running' | 'blocked'
 
@@ -17,6 +18,9 @@ export class AudioEngine {
   /** Per-transport bus. Swapped out on cut() so already-scheduled notes go silent. */
   private bus: GainNode | null = null
   private noise: AudioBuffer | null = null
+  /** Role buses + FX for the current transport bus (rebuilt with the bus, so cut() silences FX tails too). */
+  private mix: Mix | null = null
+  private stepSec = 60 / 104 / 4
   private disposed = false
   private listeners = new Set<(s: AudioStatus) => void>()
   status: AudioStatus = 'locked'
@@ -53,7 +57,23 @@ export class AudioEngine {
   private newBus(): GainNode {
     const bus = this.ctx!.createGain()
     bus.connect(this.compressor!)
+    this.mix = createMix(this.ctx!, bus, this.stepSec)
     return bus
+  }
+
+  /** Keep tempo-synced FX (the dotted-8th delay) in time. */
+  setTempo(stepSec: number) {
+    this.stepSec = stepSec
+    if (this.ctx && this.mix) setDelayTempo(this.mix, stepSec, this.ctx.currentTime)
+  }
+
+  /**
+   * Live voices for kit layers (bass, chords, leads, extra drums). Null when audio isn't running,
+   * so callers simply skip scheduling (same rule as drum triggers).
+   */
+  voices(): { ctx: AudioContext; mix: Mix; noise: AudioBuffer } | null {
+    if (!this.ctx || !this.mix || !this.noise || this.ctx.state !== 'running') return null
+    return { ctx: this.ctx, mix: this.mix, noise: this.noise }
   }
 
   /** Must be called from a user gesture. Resolves true when audio is actually running. */
@@ -92,15 +112,16 @@ export class AudioEngine {
     return (ctx.outputLatency || 0) + (ctx.baseLatency || 0)
   }
 
-  trigger(track: TrackId, time: number) {
-    if (!this.ctx || !this.bus || !this.noise || this.ctx.state !== 'running') return
-    VOICES[track](this.ctx, this.bus, Math.max(time, this.ctx.currentTime), this.noise)
+  /** Drum hit with velocity (1 = the V1 level), on the drums bus. */
+  trigger(track: TrackId, time: number, vel = 1) {
+    if (!this.ctx || !this.mix || !this.noise || this.ctx.state !== 'running') return
+    drum(this.ctx, this.mix.drums, track, Math.max(time, this.ctx.currentTime), vel, this.noise)
   }
 
   /** BIT LEAD note (melody). Same bus as the drums, so Stop's cut() silences it too. */
   triggerLead(midi: number, time: number, stepSec: number) {
     if (!this.ctx || !this.bus || this.ctx.state !== 'running') return
-    playLead(this.ctx, this.bus, Math.max(time, this.ctx.currentTime), midi, stepSec)
+    playLead(this.ctx, this.mix?.lead ?? this.bus, Math.max(time, this.ctx.currentTime), midi, stepSec)
   }
 
   /** Silence everything scheduled or sounding, immediately (Stop). */
@@ -122,6 +143,7 @@ export class AudioEngine {
     const ctx = this.ctx
     this.ctx = null
     this.bus = null
+    this.mix = null
     this.compressor = null
     if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {})
   }

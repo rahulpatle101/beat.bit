@@ -5,11 +5,11 @@ import { createMasterChain } from '@/audio/chain'
 import { stepDuration } from '@/audio/scheduler'
 import { createNoiseBuffer } from '@/audio/voices'
 import { encodeWav, toBase64 } from '../wav'
-import { KITS, type Kit } from './kits'
-import { bass, chord, crash, createMix, drum, lead, openHat, shaker, tom } from './synths'
+import { KITS, type Kit } from '@/data/kits'
+import { createMix, drum } from '@/audio/instruments'
+import { drumVel, playKitStep } from '@/audio/kitPlayer'
 
 type Stem = 'all' | 'drums' | 'bass' | 'chords' | 'lead'
-const VEL: Record<string, number> = { x: 1, o: 0.65, '-': 0.35 }
 const LEAD_IN = 0.05
 const TAIL = 2.0
 const SR = 44100
@@ -26,40 +26,20 @@ export async function renderKit(kit: Kit, stem: Stem = 'all'): Promise<AudioBuff
   const master = createMasterChain(ctx).input
   const mix = createMix(ctx, master, step)
   const noise = createNoiseBuffer(ctx)
-  const on = (s: Stem) => stem === 'all' || stem === s
+  // Stem renders mute the other role buses (FX sends follow their role bus).
+  if (stem !== 'all') for (const r of ['drums', 'bass', 'chords', 'lead'] as const) if (r !== stem) mix[r].gain.value = 0
 
   bars.forEach(({ bar }, bi) => {
     const t0 = LEAD_IN + bi * 16 * step
-    const at = (s: number) => t0 + s * step
-    if (on('drums')) {
-      for (const [key, pat] of Object.entries(bar.drums)) {
-        ;[...(pat ?? '')].forEach((ch, s) => {
-          const v = VEL[ch]
-          if (!v) return
-          if (key === 'ohat') openHat(ctx, mix.drums, at(s), v, noise)
-          else if (key === 'crash') crash(ctx, mix.drums, at(s), v, noise)
-          else if (key === 'shaker') shaker(ctx, mix.drums, at(s), v, noise)
-          else drum(ctx, mix.drums, key as 'kick' | 'snare' | 'hat' | 'clap', at(s), v, noise)
-        })
+    for (let s = 0; s < 16; s++) {
+      const t = t0 + s * step
+      // The four grid drums (kick/snare/hat/clap) with their composed velocities…
+      for (const key of ['kick', 'snare', 'hat', 'clap'] as const) {
+        const v = drumVel(bar.drums[key], s)
+        if (v) drum(ctx, mix.drums, key, t, v, noise)
       }
-      for (const n of bar.toms ?? []) tom(ctx, mix.drums, at(n.step), n.midi, n.vel)
-    }
-    if (on('bass')) for (const n of bar.bass ?? []) bass(ctx, mix.bass, at(n.step), n.midi, n.len * step, n.vel, kit.presets.bass)
-    if (on('chords')) {
-      for (const c of bar.chords ?? []) chord(ctx, mix.chords, at(c.step), c.midis, c.len * step, c.vel, kit.presets.chords, step)
-      for (const c of bar.riff ?? []) chord(ctx, mix.chords, at(c.step), c.midis, c.len * step, (bar.riffBright ?? 0.5) * c.vel, 'riff', step)
-    }
-    if (on('lead')) {
-      const play = (notes: typeof bar.lead, preset: typeof kit.presets.lead) => {
-        let prev: { end: number; midi: number } | null = null
-        for (const n of notes ?? []) {
-          const glide = prev && Math.abs(prev.end - n.step) < 0.01 && Math.abs(prev.midi - n.midi) <= 3 && (preset === 'warm' || preset === 'hero') ? prev.midi : undefined
-          lead(ctx, mix.lead, at(n.step), n.midi, n.len * step, n.vel, preset, glide)
-          prev = { end: n.step + n.len, midi: n.midi }
-        }
-      }
-      play(bar.lead, kit.presets.lead)
-      play(bar.lead2, kit.presets.lead2 ?? kit.presets.lead)
+      // …and every other layer through the shared kit player (same code path as the app).
+      playKitStep({ ctx, mix, noise }, kit, bar, s, t, step)
     }
   })
   return ctx.startRendering()

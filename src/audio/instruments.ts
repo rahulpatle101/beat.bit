@@ -1,7 +1,7 @@
-// DEV-ONLY prototype instruments for the V2.3b music-direction previews (MUSIC_DIRECTION.md).
-// Not used by the app. All voices take a BaseAudioContext (offline-render ready), schedule
-// every node at exact times, and have fixed stop times (no stuck notes possible).
-// If the direction is approved, these get promoted into src/audio with tests.
+// Kit instruments (MUSIC_DIRECTION.md §5): velocity drums + open hat/crash/shaker/toms, four
+// bass presets, four chord presets, five lead presets, and the mix (role buses + delay/reverb).
+// Promoted from the V2.3b preview prototypes. Every voice takes a BaseAudioContext (offline
+// render ready), schedules nodes at exact times, and has a fixed stop time (no stuck notes).
 
 import { midiToHz, pulseCoefficients } from '@/audio/lead'
 import { VOICES } from '@/audio/voices'
@@ -36,7 +36,7 @@ function osc(ctx: Ctx, wave: Wave, hz: number, t: number, detuneCents = 0): Osci
 }
 
 /** ADSR on a gain param with a fixed hold; robust when hold < attack + decay. */
-function adsr(g: AudioParam, t: number, peak: number, a: number, d: number, s: number, hold: number, r: number) {
+export function adsr(g: AudioParam, t: number, peak: number, a: number, d: number, s: number, hold: number, r: number) {
   const peakAt = t + Math.min(a, hold)
   const susAt = Math.max(peakAt, Math.min(t + a + d, t + hold))
   g.setValueAtTime(0, t)
@@ -262,6 +262,13 @@ export interface Mix {
   bass: GainNode
   chords: GainNode
   lead: GainNode
+  /** Dotted-8th delay; update with setDelayTempo when the BPM changes. */
+  delay: DelayNode
+}
+
+/** Keep the delay locked to a dotted 8th (3 steps) at the current tempo. */
+export function setDelayTempo(mix: Mix, stepSec: number, at: number) {
+  mix.delay.delayTime.setTargetAtTime(stepSec * 3, at, 0.05)
 }
 
 /** Group buses + a tempo-synced delay and a small generated reverb (sends from chords/lead). */
@@ -272,11 +279,12 @@ export function createMix(ctx: Ctx, master: AudioNode, stepSec: number): Mix {
     g.connect(master)
     return g
   }
-  const mix: Mix = { drums: bus(0.95), bass: bus(0.6), chords: bus(0.9), lead: bus(0.95) }
+  const roles = { drums: bus(0.95), bass: bus(0.6), chords: bus(0.9), lead: bus(0.95) }
 
   // Dotted-8th delay (3 steps), filtered feedback.
   const delay = ctx.createDelay(2)
   delay.delayTime.value = stepSec * 3
+  const mix: Mix = { ...roles, delay }
   const fb = ctx.createGain()
   fb.gain.value = 0.32
   const dlp = ctx.createBiquadFilter()

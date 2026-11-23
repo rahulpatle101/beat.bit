@@ -1,4 +1,4 @@
-// Music-theory lint for the composed preview kits (catches composition typos objectively).
+// Music-theory lint for the composed kits (catches composition typos objectively).
 import { describe, expect, it } from 'vitest'
 import { KITS, type Note } from './kits'
 

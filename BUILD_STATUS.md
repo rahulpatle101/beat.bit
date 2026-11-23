@@ -101,7 +101,7 @@
 | Unit tests | [T] | ✅ 25/25 |
 | Demo recording | [B] Screencast → ffmpeg | ✅ 21.6 s, silent (headless Chrome can't capture audio) |
 
-**Bundle:** JS ~327 KB (~105 KB gzip).
+**Bundle:** JS 338 KB (109 KB gzip), up from 318 KB in V2.1 (+20 KB: Toggle Group, remix, grooves).
 
 **Remaining issues after V2.2**
 

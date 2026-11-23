@@ -162,6 +162,38 @@
 
 **Open:** your listening review of the four kits (the key gate). Drops are only 0.5–1.3 dB louder than main sections (the lift is arrangement-driven; a sidechain pump is the proposed fix). Decisions are listed in V2_ROADMAP Part 5.
 
+
+### V3.0 — Playable Slice (2026-11-24, ✅ built, ⏳ awaiting your review)
+
+**Commits:** `7012f39` kit engine · `5ecd6b8` kits in Sandbox · `91da480` Arcade: Wake the City · (this commit) FTUE + docs. **Decisions** were taken as recommended on "continue" (V2_ROADMAP Part 5).
+
+| Check | Method | Result |
+|---|---|---|
+| App sound = approved previews | [B] Offline render via the shared kit player | ✅ Every section within 0.1 dB. Peaks 0.74–0.92. 0 clipped. Tails < −92 dB. |
+| Sandbox on kits | [B] | ✅ Performers on the NEON DRIVE grid steps with 0-frame lag. Backing audible with drums cleared. 112 BPM 133.3 ms (exp 133.9). Kit switch while playing + Undo. Silence after Stop. |
+| Judge / scoring logic | [T] 12 arcade tests | ✅ Windows, Assist ×2, chart rules, perfect run = max score, mash < 25% accuracy, debounce, miss sweep, strays, live vs final accuracy, ranks, XP cap, corrupt storage |
+| On-time run | [B] Scripted presses at cue times | ✅ 62/62 PERFECT, ★★★, 19,500 (= max bound), press offsets 0–4.5 ms |
+| +50 ms run | [B] | ✅ All GREAT, ★ |
+| Mash run | [B] F/J ~8 per beat | ✅ 783 strays, 4% accuracy, 0 stars, 0 XP |
+| Persistence / anti-farming | [B] Reload in one session; replay | ✅ XP, best stars, and "PLAY AGAIN" persist. Replay at or below the best tier → 20% XP. |
+| Keyboard / a11y | [B] | ✅ Focus ring on every control (Tab sweep). Enter starts. Esc quits. Results heading focused + summary announced. |
+| Mobile / reduced motion | [B] 375 px @ 2× | ✅ No overflow. Pads 80 px. Cue pulse off with reduced motion. |
+| Regression | [B][T] | ✅ 180 BPM 83.32 ms, rapid Play/Stop, grid keyboard, scene description. 60/60 tests. |
+| Demo recording | [B] | ✅ 37.8 s silent screencast of a human-like run (53P · 6G · 3M) |
+
+**Bundle:** JS 381 KB (122 KB gzip). The DEV-only `__arcade` handle is confirmed absent from `dist/`.
+
+**Remaining issues**
+
+| # | Severity | Issue |
+|---|---|---|
+| A1 | **Needs you** | Nobody has listened yet: the kits in the app, and how the challenge *feels* with real hands, speakers, and latency |
+| A2 | Medium (feel) | District reward is subtle (8 small ambient windows). It needs a bigger "city wakes" payoff. |
+| A3 | Medium | No calibration screen yet. Judging relies on `getOutputTimestamp()` / output latency only. Bluetooth audio will feel late. |
+| A4 | Low | Esc quits (no pause). Stray presses are silent. NEON DRIVE isn't gated behind the tutorial. Two primary buttons on the first screen (WAKE THE CITY and PLAY). |
+| A5 | Low | The test scripts assumed button order (fixed). The dev-server background wrapper sometimes reports failure while Vite runs. |
+| — | [—] | Not verified: real devices, VoiceOver, human playtest of the difficulty curve |
+
 ## How findings were verified
 
 | Tag | Meaning |

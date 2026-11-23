@@ -182,6 +182,12 @@ export function ArcadeResults({ view, onRetry, onSandbox }: { view: ArcadeView; 
           <XpBar value={Math.round(rank.progress * 100)} className="h-4" aria-label={`Rank progress: ${rank.toNext} XP to ${rank.next ?? 'max rank'}`} />
           {r.rankUp && <p className="retro text-[10px] text-snare">RANK UP! {rank.name}</p>}
         </div>
+        {r.stars >= 1 && (
+          <p className="text-sm text-ink-dim">
+            Now make <span className="text-ink">NEON DRIVE</span> yours in the Sandbox: edit the grid, press REMIX, or try
+            PIXEL QUEST.
+          </p>
+        )}
         <div className="flex flex-wrap gap-6">
           <Button size="lg" className="h-12 text-sm" onClick={onRetry}>
             ▶ RETRY

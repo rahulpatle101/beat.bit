@@ -266,7 +266,33 @@ V2.1 Fixes + Reactive World ──► V2.2 Grooves ──► V2.3 Share/Remix (+
 - [ ] Screen reader: objectives and results announced, no per-note announcements. An optional count-in is available.
 - [ ] **FTUE:** a scripted first visit produces sound within 5 s of pressing PLAY, and the first hinted cue can be hit within 15 s of page load.
 
-### Decisions needed before the slice
+### Slice status (2026-11-24): ✅ BUILT, awaiting your review
+
+On "continue" I proceeded with the **recommended option for each decision below** (stated at the time):
+- music arcade positioning (tagline "Make funky tunes. Wake the city.");
+- kits replace grooves in the picker;
+- NEON DRIVE + PIXEL QUEST;
+- V2.3a melody controls removed;
+- F/J + on-screen pads.
+
+**Your by-ear approval of the kits is still open.**
+
+| Item | Status | Commit |
+|---|---|---|
+| S1 Kit engine | ✅ Instruments + kit player promoted to `src/audio`. Safety limiter. App renders match the approved previews within 0.1 dB per section. | `7012f39` |
+| S2 Kits in Sandbox | ✅ Kit picker (NIGHT SHIFT / BOSS RUSH locked), grid from the kit's composed drums + accents, looping main-section backing, mood per kit, Remix + Undo kept | `5ecd6b8` |
+| S3 Wake the City | ✅ Chart, audio-clock judging, scoring, anti-spam, HUD, pads, results + 8bitcn XP Bar, districts | `91da480` |
+| S4 Progression-lite | ✅ XP, ranks, best stars, replay cap, Assist, versioned `localStorage`. ⚠️ **Calibration not built** (deferred). | `91da480` |
+| S5 FTUE | ✅ Simplified: a "WAKE THE CITY" start card (first-time copy, hints for the first 4 cues), and results point to Sandbox. Sandbox stays open from the start (no tutorial gate). | this commit |
+
+**Deviations from GAME_DESIGN, to review:**
+- Esc **quits** (there's no pause).
+- NEON DRIVE is playable in Sandbox before the tutorial.
+- Stray presses are silent; only judged hits sound.
+- The calibration screen is deferred.
+- District lighting is subtle (8 ambient windows).
+
+### Decisions needed before the slice (answered by assumption, see above)
 1. **Vision change:** adopt "music arcade" as the product positioning (it supersedes "a tiny pixel world that performs the beat you make" as the headline, while the world stays central)?
 2. **Kits replace V2.2 grooves** in the picker (the V2.2 grooves are retired from the UI, kept in code for tests)? Recommended: yes.
 3. **Slice kits:** NEON DRIVE + PIXEL QUEST (recommended), or NEON DRIVE only (faster)?

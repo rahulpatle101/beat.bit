@@ -13,7 +13,7 @@ import { AudioEngine, type AudioStatus } from '@/audio/engine'
 import { playKitStep } from '@/audio/kitPlayer'
 import { Scheduler, stepDuration, type StepEvent } from '@/audio/scheduler'
 import { barPattern, barVel, kitById, kitGrid, section, type Bar, type KitId } from '@/data/kits'
-import { clampBpm, clonePattern, emptyPattern, isEmpty, samePattern, type Pattern, type TrackId } from '@/data/patterns'
+import { TRACK_IDS, clampBpm, clonePattern, emptyPattern, isEmpty, samePattern, type Pattern, type TrackId } from '@/data/patterns'
 import { remix as rollRemix, type Change } from '@/data/remix'
 
 interface State {
@@ -59,8 +59,8 @@ const HISTORY_LIMIT = 30
 export interface ArrangementSpec {
   kitId: KitId
   bars: Bar[]
-  /** Grid tracks the player performs (not played by the backing). */
-  muted: ReadonlySet<TrackId>
+  /** Steps the player performs (not played by the backing). Everything else plays as composed. */
+  isPlayerStep: (bar: number, track: TrackId, step: number) => boolean
   /** Called for every scheduled step (arcade cue registration), at its exact audio time. */
   onScheduled?: (bar: number, step: number, time: number, stepSec: number) => void
   /** Called once the last bar has been heard and its tail has rung out. */
@@ -212,7 +212,11 @@ export function useSequencer(): Sequencer {
       now: () => clockRef.current(),
       getPattern: (bar) => {
         const arr = arrangementRef.current
-        return arr ? (arr.bars[bar] ? barPattern(arr.bars[bar], arr.muted) : emptyPattern()) : patternRef.current
+        if (!arr) return patternRef.current
+        if (!arr.bars[bar]) return emptyPattern()
+        const p = barPattern(arr.bars[bar])
+        for (const t of TRACK_IDS) for (let s = 0; s < 16; s++) if (p[t][s] && arr.isPlayerStep(bar, t, s)) p[t][s] = false
+        return p
       },
       // Only the audio clock may schedule sound. In silent mode the times come from
       // performance.now() and must never reach the AudioContext (BUILD_STATUS D3).

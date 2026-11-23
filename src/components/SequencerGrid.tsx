@@ -28,6 +28,8 @@ interface Props {
   onStep: (fn: StepListener) => () => void
   onTransport: (fn: TransportListener) => () => void
   onRemix: (fn: RemixListener) => () => void
+  /** V3.0 Arcade: cue states for the current bar, keyed `${track}:${step}`; grid editing is locked. */
+  cues?: Map<string, 'open' | 'perfect' | 'great' | 'good' | 'miss'>
 }
 
 const ROWS = TRACKS.length
@@ -45,7 +47,7 @@ const place = (t: number, s: number) =>
     '--cm': col(s % 8),
   }) as CSSProperties
 
-export function SequencerGrid({ pattern, onToggle, onStep, onTransport, onRemix }: Props) {
+export function SequencerGrid({ pattern, onToggle, onStep, onTransport, onRemix, cues }: Props) {
   const cells = useRef<(HTMLButtonElement | null)[]>([]) // index = t * STEPS + s
   const [focus, setFocus] = useState({ t: 0, s: 0 })
   const register = useCallback((i: number, el: HTMLButtonElement | null) => {
@@ -155,7 +157,7 @@ export function SequencerGrid({ pattern, onToggle, onStep, onTransport, onRemix 
   return (
     <div
       role="group"
-      aria-label="Drum pattern: 4 tracks by 16 steps"
+      aria-label={cues ? 'Challenge: the drums of the current bar; your cues are marked' : 'Drum pattern: 4 tracks by 16 steps'}
       aria-describedby="seq-help"
       className="seq"
       onKeyDown={onKeyDown}
@@ -212,6 +214,7 @@ export function SequencerGrid({ pattern, onToggle, onStep, onTransport, onRemix 
             on={on}
             tabbable={focus.t === t && focus.s === s}
             onToggle={onToggle}
+            cue={cues?.get(`${track.id}:${s}`)}
             onFocusCell={setFocus}
             register={register}
           />
@@ -229,6 +232,7 @@ interface CellProps {
   on: boolean
   tabbable: boolean
   onToggle: (track: TrackId, step: number) => void
+  cue?: 'open' | 'perfect' | 'great' | 'good' | 'miss'
   onFocusCell: (pos: { t: number; s: number }) => void
   register: (i: number, el: HTMLButtonElement | null) => void
 }
@@ -241,6 +245,7 @@ const StepCell = memo(function StepCell({
   on,
   tabbable,
   onToggle,
+  cue,
   onFocusCell,
   register,
 }: CellProps) {
@@ -257,6 +262,7 @@ const StepCell = memo(function StepCell({
       data-track={track}
       data-group={Math.floor(s / 4) % 2}
       data-t={t}
+      data-cue={cue}
       style={place(t, s)}
       aria-label={`${trackName}, step ${s + 1}${beat}`}
       aria-pressed={on}

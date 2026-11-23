@@ -43,6 +43,7 @@
     --color-panel: var(--panel);
     --color-cell: var(--cell);
     --color-cell-alt: var(--cell-alt);
+    --color-cell-edge: var(--cell-edge);
     --color-ink: var(--ink);
     --color-ink-dim: var(--ink-dim);
     --color-kick: var(--kick);
@@ -166,4 +167,36 @@
   html {
     @apply font-sans;
     }
+}
+
+/* V3.0 Arcade: judgement pop-up and pad hint (stepped, pixel-honest; static with reduced motion). */
+.arcade-flash {
+  animation: arcade-pop 240ms steps(3, end);
+}
+@keyframes arcade-pop {
+  from {
+    transform: translateY(-4px);
+    filter: brightness(1.5);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
+}
+.arcade-hint {
+  animation: arcade-hint 0.4s steps(2, end) infinite;
+}
+@keyframes arcade-hint {
+  from {
+    filter: brightness(1.4);
+  }
+  to {
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arcade-flash,
+  .arcade-hint {
+    animation: none;
+  }
 }

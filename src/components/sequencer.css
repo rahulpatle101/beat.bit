@@ -214,7 +214,33 @@
   }
 }
 
+/* V3.0 Arcade cues: open cues pulse an ink ring (stepped); judged cues hold a state. */
+.seq-cell[data-cue='open'] {
+  z-index: 2;
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+  animation: seq-cue 0.5s steps(2, end) infinite;
+}
+.seq-cell[data-cue='perfect'],
+.seq-cell[data-cue='great'],
+.seq-cell[data-cue='good'] {
+  outline: 3px solid var(--ink);
+  outline-offset: -3px;
+  filter: brightness(1.25);
+}
+.seq-cell[data-cue='miss'] {
+  opacity: 0.35;
+  background-image: linear-gradient(45deg, transparent 45%, var(--ink) 45% 55%, transparent 55%);
+}
+@keyframes seq-cue {
+  from { outline-color: var(--ink); }
+  to { outline-color: transparent; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .seq-cell[data-cue='open'] {
+    animation: none;
+  }
   .seq-cell.is-hit[aria-pressed='true'] {
     animation: none;
   }

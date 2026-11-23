@@ -5,6 +5,11 @@ import { Kbd } from '@/components/ui/8bit/kbd'
 import { CityScene } from '@/components/CityScene'
 import { SequencerGrid } from '@/components/SequencerGrid'
 import { TransportControls } from '@/components/TransportControls'
+import { ArcadeHud, ArcadePads, ArcadeResults, ArcadeStart } from '@/components/ArcadePanel'
+import { rankFor } from '@/data/arcade'
+import { barPattern } from '@/data/kits'
+import { DISTRICTS } from '@/scene/city'
+import { useArcade } from '@/hooks/useArcade'
 import { useEffect, useState } from 'react'
 import type { AudioStatus } from '@/audio/engine'
 import { STARTER_KITS, kitById } from '@/data/kits'
@@ -18,7 +23,12 @@ const STATUS: Record<AudioStatus, { label: string; variant: 'secondary' | 'defau
 
 export default function App() {
   const seq = useSequencer()
+  const arcade = useArcade(seq)
+  const av = arcade.view
+  const inChallenge = av.phase === 'running'
   const status = STATUS[seq.audioStatus]
+  const rank = rankFor(av.progress.xp)
+  const power = av.phase === 'running' ? av.districts : av.phase === 'results' ? (av.results && av.results.stars >= 1 ? DISTRICTS : av.districts) : null
   const { onRemix } = seq
 
   // Remix die: rollKey changes on every roll; rollSize = how many cells it changed.
@@ -35,9 +45,14 @@ export default function App() {
           </div>
           <p className="text-sm text-ink-dim">Make funky tunes. Wake the city.</p>
         </div>
-        <Badge variant={status.variant} className="text-[10px]">
-          {status.label}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-5">
+          <Badge variant="outline" className="text-[10px]" aria-label={`Rank ${rank.name}, ${av.progress.xp} XP`}>
+            {rank.name}
+          </Badge>
+          <Badge variant={status.variant} className="text-[10px]">
+            {status.label}
+          </Badge>
+        </div>
       </header>
 
       <main className="flex flex-col gap-8">
@@ -53,7 +68,8 @@ export default function App() {
             </p>
             <CityScene
               playing={seq.playing}
-              mood={kitById(seq.kitId).mood}
+              mood={kitById(inChallenge ? av.challenge.kitId : seq.kitId).mood}
+              power={power}
               onRemix={seq.onRemix}
               onStep={seq.onStep}
               onTransport={seq.onTransport}
@@ -74,32 +90,39 @@ export default function App() {
           </Alert>
         )}
 
+        {av.phase === 'idle' && <ArcadeStart view={av} onStart={arcade.start} onAssist={arcade.toggleAssist} />}
+        {av.phase === 'running' && <ArcadeHud view={av} onQuit={arcade.quit} />}
+        {av.phase === 'results' && <ArcadeResults view={av} onRetry={arcade.start} onSandbox={arcade.backToSandbox} />}
+
+        {!inChallenge && av.phase !== 'results' && (
         <Card>
-          <CardContent className="px-4 py-2 sm:px-6">
-            <TransportControls
-              playing={seq.playing}
-              bpm={seq.bpm}
-              kitId={seq.kitId}
-              unlocked={STARTER_KITS}
-              edited={seq.edited}
-              canUndo={seq.canUndo}
-              rollKey={roll.key}
-              rollSize={roll.size}
-              onPlay={seq.play}
-              onStop={seq.stop}
-              onBpm={seq.setBpm}
-              onKit={seq.loadKit}
-              onRemix={seq.remix}
-              onUndo={seq.undo}
-              onClear={seq.clear}
-            />
-          </CardContent>
-        </Card>
+            <CardContent className="px-4 py-2 sm:px-6">
+              <TransportControls
+                playing={seq.playing}
+                bpm={seq.bpm}
+                kitId={seq.kitId}
+                unlocked={STARTER_KITS}
+                edited={seq.edited}
+                canUndo={seq.canUndo}
+                rollKey={roll.key}
+                rollSize={roll.size}
+                onPlay={seq.play}
+                onStop={seq.stop}
+                onBpm={seq.setBpm}
+                onKit={seq.loadKit}
+                onRemix={seq.remix}
+                onUndo={seq.undo}
+                onClear={seq.clear}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent className="seq-wrap px-3 py-4 sm:px-6">
             <SequencerGrid
-              pattern={seq.pattern}
+              pattern={inChallenge ? barPattern(av.challenge.bars[av.bar] ?? av.challenge.bars[0]) : seq.pattern}
+              cues={inChallenge ? av.cueStates : undefined}
               onToggle={seq.toggle}
               onStep={seq.onStep}
               onTransport={seq.onTransport}
@@ -108,18 +131,27 @@ export default function App() {
           </CardContent>
         </Card>
 
+        {inChallenge && <ArcadePads view={av} onHit={arcade.hit} />}
+
+        {inChallenge ? (
+          <p id="seq-help" className="text-sm text-ink-dim">
+            Hit <span className="text-kick">KICK</span> (F) and <span className="text-snare">SNARE</span> (J) when the lamp
+            reaches a glowing step. Clean bars light up the city. Esc quits.
+          </p>
+        ) : (
         <p id="seq-help" className="text-sm text-ink-dim">
-          <span className="hidden items-center gap-2 sm:inline-flex">
-            <Kbd>←</Kbd>
-            <Kbd>→</Kbd>
-            <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> move ·<Kbd>SPACE</Kbd> toggle ·<Kbd>TAB</Kbd> controls · REMIX rolls a
-            variation
-          </span>
-          <span className="sm:hidden">
-            Press PLAY. Tap squares to change the beat, or REMIX to roll a variation.
-          </span>
-        </p>
+            <span className="hidden items-center gap-2 sm:inline-flex">
+              <Kbd>←</Kbd>
+              <Kbd>→</Kbd>
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd> move ·<Kbd>SPACE</Kbd> toggle ·<Kbd>TAB</Kbd> controls · REMIX rolls a
+              variation
+            </span>
+            <span className="sm:hidden">
+              Press PLAY. Tap squares to change the beat, or REMIX to roll a variation.
+            </span>
+          </p>
+        )}
       </main>
 
       <footer className="mt-auto pt-6 text-xs text-ink-dim">

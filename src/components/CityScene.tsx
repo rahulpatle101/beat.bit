@@ -18,6 +18,8 @@ interface Props {
   playing: boolean
   /** V2.2: sky tint of the current groove. */
   mood: MoodId
+  /** V3.0 Arcade: lit districts (0..DISTRICTS); null = normal city. */
+  power?: number | null
   onRemix: (fn: RemixListener) => () => void
   onStep: (fn: StepListener) => () => void
   onTransport: (fn: TransportListener) => () => void
@@ -26,7 +28,7 @@ interface Props {
   onAudition: (fn: AuditionListener) => () => void
 }
 
-export function CityScene({ playing, mood, onStep, onTransport, onFrame, onCue, onAudition, onRemix }: Props) {
+export function CityScene({ playing, mood, power = null, onStep, onTransport, onFrame, onCue, onAudition, onRemix }: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<Scene | null>(null)
@@ -93,6 +95,10 @@ export function CityScene({ playing, mood, onStep, onTransport, onFrame, onCue, 
     moodRef.current = mood
     sceneRef.current?.setMood(mood)
   }, [mood])
+
+  useEffect(() => {
+    sceneRef.current?.setPower(power)
+  }, [power])
 
   return (
     <div ref={boxRef} className="flex w-full justify-center bg-void" aria-hidden="true">

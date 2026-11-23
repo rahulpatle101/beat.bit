@@ -71,6 +71,9 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
 /** Snare lights this many small windows (V2.1 C2; V1 was 3–6). */
 const SNARE_WINDOWS = 3
 const SNARE_CANDIDATES = WINDOWS.map((_, i) => i).filter((i) => !APARTMENT_WINDOWS.has(i))
+/** Ambient windows ordered left → right: Arcade "districts" light in this order. */
+const AMBIENT_BY_X = [...AMBIENT_WINDOWS].sort((a, b) => WINDOWS[a][0] - WINDOWS[b][0])
+export const DISTRICTS = AMBIENT_BY_X.length
 
 interface LitWindow {
   index: number
@@ -113,6 +116,8 @@ export class CityScene {
   private mood: MoodId = 'night'
   private rollAt = -Infinity
   private rollSeed = 1
+  /** Arcade district power: how many ambient windows (left → right) may light. null = all. */
+  private power: number | null = null
 
   constructor(canvas: HTMLCanvasElement, palette: Palette) {
     canvas.width = W
@@ -152,6 +157,11 @@ export class CityScene {
     const c = el.getContext('2d')!
     draw(c)
     return el
+  }
+
+  /** Arcade: limit the lit ambient windows to `districts` (left → right); null restores normal. */
+  setPower(districts: number | null) {
+    this.power = districts
   }
 
   /** Switch the sky tint (cached per mood). Visual only; applied on the next frame. */
@@ -352,7 +362,8 @@ export class CityScene {
     if (this.mode !== 'idle') {
       const rippleAge = now - this.rippleAt
       c.fillStyle = p.snare
-      for (const i of AMBIENT_WINDOWS) {
+      for (const [k, i] of AMBIENT_BY_X.entries()) {
+        if (this.power !== null && k >= this.power) continue
         const [x, y] = WINDOWS[i]
         const light = this.lightAt(x, now)
         if (!light) continue

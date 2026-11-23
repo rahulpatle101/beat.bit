@@ -4,12 +4,13 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { AudioEngine, type AudioStatus } from '@/audio/engine'
-import { Scheduler, type StepEvent } from '@/audio/scheduler'
+import { Scheduler, stepDuration, type StepEvent } from '@/audio/scheduler'
 import {
   SIGNAL,
   clampBpm,
   clonePattern,
   emptyPattern,
+  isEmpty,
   type Pattern,
   type TrackId,
 } from '@/data/patterns'
@@ -46,6 +47,11 @@ export type StepListener = (e: StepEvent, frameTime: number) => void
 export type TransportListener = (playing: boolean) => void
 /** Called once per animation frame, after that frame's step events (rAF timestamp, ms). */
 export type FrameListener = (now: number) => void
+/** UI cues for the scene's moments (no beat timing): blackout, ripple, lights-return. */
+export type SceneCueName = 'cleared' | 'groove' | 'non-empty'
+export type CueListener = (cue: SceneCueName) => void
+/** An audition sound (step toggled on while stopped) was heard at `frameTime`. */
+export type AuditionListener = (track: TrackId, stepMs: number, frameTime: number) => void
 
 export interface Sequencer {
   pattern: Pattern
@@ -69,6 +75,10 @@ export interface Sequencer {
    * published. Renderers draw here so the grid and scene never disagree by a frame.
    */
   onFrame: (fn: FrameListener) => () => void
+  /** Clear / Groove / first note after empty. */
+  onCue: (fn: CueListener) => () => void
+  /** Audition sounds, published by the render loop when heard. */
+  onAudition: (fn: AuditionListener) => () => void
 }
 
 export function useSequencer(): Sequencer {
@@ -99,6 +109,10 @@ export function useSequencer(): Sequencer {
   const stepListeners = useRef(new Set<StepListener>())
   const transportListeners = useRef(new Set<TransportListener>())
   const frameListeners = useRef(new Set<FrameListener>())
+  const cueListeners = useRef(new Set<CueListener>())
+  const auditionListeners = useRef(new Set<AuditionListener>())
+  /** Auditions scheduled on the audio clock, waiting to be heard. */
+  const auditionQueue = useRef<{ track: TrackId; time: number; stepMs: number }[]>([])
 
   const announce = useCallback((msg: string) => {
     // Re-announce identical messages by toggling a zero-width suffix.
@@ -106,7 +120,12 @@ export function useSequencer(): Sequencer {
   }, [])
 
   const emitTransport = useCallback((on: boolean) => {
+    auditionQueue.current = []
     for (const fn of transportListeners.current) fn(on)
+  }, [])
+
+  const emitCue = useCallback((cue: SceneCueName) => {
+    for (const fn of cueListeners.current) fn(cue)
   }, [])
 
   const stopInternal = useCallback(
@@ -169,6 +188,15 @@ export function useSequencer(): Sequencer {
         const events = scheduler.drain(heardAt)
         for (const ev of events) for (const fn of stepListeners.current) fn(ev, now)
       }
+      // Auditions: publish when the audition sound is actually heard.
+      const pending = auditionQueue.current
+      if (pending.length) {
+        const heardAt = engine.now() - engine.outputLatency()
+        while (pending.length && pending[0].time <= heardAt) {
+          const a = pending.shift()!
+          for (const fn of auditionListeners.current) fn(a.track, a.stepMs, now)
+        }
+      }
       for (const fn of frameListeners.current) fn(now)
       raf = requestAnimationFrame(loop)
     }
@@ -213,28 +241,37 @@ export function useSequencer(): Sequencer {
   const toggle = useCallback(
     (track: TrackId, step: number) => {
       const turningOn = !patternRef.current[track][step]
+      const wasEmpty = isEmpty(patternRef.current)
       dispatch({ type: 'toggle', track, step })
+      // First note after an empty pattern: the scene's lights return (after a blackout).
+      if (turningOn && wasEmpty) emitCue('non-empty')
       // Audition while stopped, on toggle-on only (DESIGN.md §7.1). Toggling is a user
       // gesture, so it may also unlock audio.
       const engine = engineRef.current
       if (turningOn && engine && !schedulerRef.current?.running) {
+        // Audition performs (V2.1): the performer reacts when the audition sound is heard.
         void engine.unlock().then((ok) => {
-          if (ok) engine.trigger(track, engine.now() + 0.005)
+          if (!ok || schedulerRef.current?.running) return
+          const time = engine.now() + 0.005
+          engine.trigger(track, time)
+          auditionQueue.current.push({ track, time, stepMs: stepDuration(bpmRef.current) * 1000 })
         })
       }
     },
-    [],
+    [emitCue],
   )
 
   const clear = useCallback(() => {
     dispatch({ type: 'clear' })
+    emitCue('cleared')
     announce('Pattern cleared')
-  }, [announce])
+  }, [announce, emitCue])
 
   const loadGroove = useCallback(() => {
     dispatch({ type: 'load', pattern: SIGNAL.pattern, bpm: SIGNAL.bpm })
+    emitCue('groove')
     announce(`Groove loaded, ${SIGNAL.bpm} BPM`)
-  }, [announce])
+  }, [announce, emitCue])
 
   const setBpm = useCallback((bpm: number) => dispatch({ type: 'bpm', bpm }), [])
 
@@ -259,6 +296,20 @@ export function useSequencer(): Sequencer {
     }
   }, [])
 
+  const onCue = useCallback((fn: CueListener) => {
+    cueListeners.current.add(fn)
+    return () => {
+      cueListeners.current.delete(fn)
+    }
+  }, [])
+
+  const onAudition = useCallback((fn: AuditionListener) => {
+    auditionListeners.current.add(fn)
+    return () => {
+      auditionListeners.current.delete(fn)
+    }
+  }, [])
+
   return {
     pattern: state.pattern,
     bpm: state.bpm,
@@ -274,6 +325,8 @@ export function useSequencer(): Sequencer {
     onStep,
     onTransport,
     onFrame,
+    onCue,
+    onAudition,
   }
 }
 

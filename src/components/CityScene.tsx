@@ -4,16 +4,24 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { CityScene as Scene, H, W, readPalette } from '@/scene/city'
-import type { FrameListener, StepListener, TransportListener } from '@/hooks/useSequencer'
+import type {
+  AuditionListener,
+  CueListener,
+  FrameListener,
+  StepListener,
+  TransportListener,
+} from '@/hooks/useSequencer'
 
 interface Props {
   playing: boolean
   onStep: (fn: StepListener) => () => void
   onTransport: (fn: TransportListener) => () => void
   onFrame: (fn: FrameListener) => () => void
+  onCue: (fn: CueListener) => () => void
+  onAudition: (fn: AuditionListener) => () => void
 }
 
-export function CityScene({ playing, onStep, onTransport, onFrame }: Props) {
+export function CityScene({ playing, onStep, onTransport, onFrame, onCue, onAudition }: Props) {
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sceneRef = useRef<Scene | null>(null)
@@ -52,6 +60,10 @@ export function CityScene({ playing, onStep, onTransport, onFrame }: Props) {
     })
     // Transport → scene moments (switch-on / power-down), applied in the frame timebase.
     const offTransport = onTransport((on) => scene.cue(on ? 'start' : 'stop'))
+    // Clear → blackout, Groove → ripple, first note after empty → lights return.
+    const offCue = onCue((cue) => scene.cue(cue))
+    // Audition performs: the performer reacts when the audition sound is heard.
+    const offAudition = onAudition((track, stepMs, frameTime) => scene.audition(track, stepMs, frameTime))
 
     // Draw from the sequencer's single render loop (no second rAF).
     const offFrame = onFrame((now) => scene.draw(now))
@@ -60,10 +72,12 @@ export function CityScene({ playing, onStep, onTransport, onFrame }: Props) {
       offFrame()
       offStep()
       offTransport()
+      offCue()
+      offAudition()
       mq.removeEventListener('change', syncMotion)
       sceneRef.current = null
     }
-  }, [onStep, onTransport, onFrame])
+  }, [onStep, onTransport, onFrame, onCue, onAudition])
 
   return (
     <div ref={boxRef} className="flex w-full justify-center bg-void" aria-hidden="true">

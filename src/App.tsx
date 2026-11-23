@@ -33,11 +33,21 @@ export default function App() {
       <main className="flex flex-col gap-8">
         <Card className="gap-0 py-0">
           <CardContent className="p-0">
+            {/* The canvas is decorative (aria-hidden). This static description tells screen
+                reader users what the scene shows; individual animations aren't announced. */}
+            <p className="sr-only">
+              Signal City: a pixel city that performs your beat. A robot stomps on the kick, a
+              resident cheers from a lit window on the snare, birds hop along a wire on the hi-hat,
+              and a rooftop crowd raises its hands on the clap. Street lamps follow the playing
+              step.
+            </p>
             <CityScene
               playing={seq.playing}
               onStep={seq.onStep}
               onTransport={seq.onTransport}
               onFrame={seq.onFrame}
+              onCue={seq.onCue}
+              onAudition={seq.onAudition}
             />
           </CardContent>
         </Card>

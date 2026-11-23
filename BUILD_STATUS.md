@@ -27,6 +27,52 @@
 - Reduced motion: no skyline drop.
 - No console errors.
 
+### V2.1 — Signal City Live (2026-11-23)
+
+**Commits:** `4cc7a25` (approved docs) · `a11d9b3` (performers + transport moments) · `e8c715b` (cues, audition performs, scene description). All pushed to `origin/main`.
+
+**Implemented** (per ART_DIRECTION / DESIGN → V2.1 amendments)
+- Four performers on the approved coordinates and sprites: Stomper (kick), Resident (snare), Wire Birds (hi-hat), Rooftop Crowd (clap). They're dark rim-lit silhouettes that brighten only on hits. The crowd stays dark with violet hands.
+- Motion personalities as pure timing functions (`src/scene/performers.ts`), driven only by heard step and audition events.
+- C2: snare = resident + 3 small windows. C3: 8 ambient windows at 30% while playing. C7: apartment windows merged from 2×2 V1 window blocks, plus the power line. No building moved.
+- Moments: switch-on (Play), power-down (Stop), blackout (Clear while playing) with lights returning on the first new note, ripple (Groove while playing), plus reduced-motion variants.
+- Audition performs: a step toggled on while stopped triggers its sound and performer once. Playback doesn't start.
+- A static, visually-hidden scene description. The canvas stays `aria-hidden`, with no per-animation announcements.
+- Engine, scheduler, sequencer grid, transport controls, and 8bitcn components are unchanged, apart from the two new hook channels (`onCue`, `onAudition`).
+
+**Verification (DESIGN V6)**
+
+| Check | Method | Result |
+|---|---|---|
+| Each performer reacts only on its drum | [B] Per-frame canvas probes of signature pixels over 2+ bars of SIGNAL | ✅ kick 0,6,8,13 · snare 4,12 · hi-hat 0,2,4,6,8,10,12,14,15 · clap 12,15. Identical at 104 BPM, 180 BPM, and reduced motion. |
+| Reaction lands on the heard step | [B] Frames between the grid playhead change and the performer onset | ✅ 0 frames (100% of onsets) |
+| Motion personalities | [T] Timing table at 104/180 BPM. [B] Pose sequences in the composition preview and the live probes. | ✅ Kick 94→43 ms, snare cheer 58 ms, hi-hat hop 50 ms (the shortest), clap half→full→half with a 36 ms stagger (at 104 BPM) |
+| No stuck poses | [T] 60/104/180 BPM. [B] 21 rapid Play/Stop clicks → idle visor, nothing lit. | ✅ |
+| Quiet crowd | [B] Ink pixels in the crowd region during claps | ✅ The crowd never turns ink. (One ink pixel came from a star at (46, 9) twinkling on hi-hat; it's 0 with reduced motion, where twinkle is off.) |
+| Switch-on / power-down | [B] Ambient window and visor probes | ✅ 167 ms, left→right / 107 ms. Reduced motion: instant. |
+| Blackout + return | [B] | ✅ All ambient off in 192 ms, sign dark, transport and lamps continue. Lights return 108 ms after the first new note. Reduced motion: instant. |
+| Ripple | [B] | ✅ Bright ambient flash on Groove while playing. None with reduced motion. |
+| Audition performs | [B] Toggle a kick and a clap step on while stopped | ✅ The performer reacts ~53 ms after the click (when the sound plays) and returns to idle. Playback not started. Toggling off doesn't perform. |
+| Reduced motion translation | [B] | ✅ No Stomper squash (0 frames), no bird eye-row change, no skyline drop |
+| Regression (Phase 0 suite) | [B][T] | ✅ 104 BPM 144.3 ms (exp 144.23), 180 BPM 83.13 ms (exp 83.33), steps in order. Focus ring on PLAY/Tempo/GROOVE/CLEAR/grid via real Tab presses. Grid keyboard. 19/19 unit tests. No console errors. |
+| Legibility | [B] Screenshots at desktop 6× and an emulated phone (375 px @ 2× DPR) | ✅ Integer device-pixel scale, no artifacts. Birds and crowd small but distinct on phone. **Awaiting your visual review.** |
+| Recording | [B] DevTools screencast → ffmpeg | ✅ 17 s silent video (headless Chrome can't capture audio) |
+
+**Bundle:** JS 318 KB (103 KB gzip), up from 309 KB (+9 KB) for V2.1.
+
+**Remaining issues after V2.1**
+
+| # | Severity | Issue | Note |
+|---|---|---|---|
+| V1 | Low (visual) | The resident's 6×6 cheer pose still reads partly as a cup shape | Approved for tuning. The reaction reads in context (light + silhouette change). Your call at review. |
+| V2 | Low (visual) | Birds and crowd are ~8 CSS px on phones and read through motion and accents rather than shape | Accepted in the composition decision (no enlarging) |
+| V3 | Info | The clap stagger (36 ms) is nearly invisible at phone size | Intended ("restrained") |
+| V4 | Info | Audition visuals trail the click by ~50 ms: the audio unlock + 5 ms schedule + output latency | By design: visuals follow the heard sound |
+| D3 | Low | The late-unlock branch is still unexercised in Chrome | Unchanged since Phase 0 |
+| D5 | Low | Mobile grid cells ~34 px at 375 px | Scheduled for V2.4 |
+| — | [—] | Not verified: real iOS/Android devices, VoiceOver, human listening test | Needs you or a device |
+
+
 ## How findings were verified
 
 | Tag | Meaning |
@@ -46,7 +92,7 @@
 | Sequencer (4×16, edit while playing) | ✅ Working |
 | Audio engine and scheduler | ✅ Working (timing verified). ⚠️ Sound quality not yet heard by a human. |
 | Transport (Play/Stop, BPM, Groove, Clear) | ✅ Working |
-| Reactive scene (Signal City) | ✅ Working and synced to scheduled notes |
+| Reactive scene (Signal City) | ✅ Working and synced to scheduled notes → **V2.1 Signal City Live: performers + moments ✅ (see Phase log)** |
 | Autoplay / blocked / tab-hidden handling | ✅ Working |
 | Responsive layout | ✅ No overflow 320–1280px. ⚠️ Mobile cells below the 36px target |
 | Accessibility | ⚠️ **Two WCAG failures** (focus visibility, non-text contrast). VoiceOver untested. → **Both fixed in Phase 0.** VoiceOver still untested. |

@@ -1,7 +1,7 @@
 # BEAT.BIT — Art Direction
 
 **Day 001 / 100 Days of Digital Craft** · Stage 2 of 4
-**Status:** ✅ APPROVED on 2026-11-23 with **Direction A: Signal City**
+**Status:** ✅ V1 APPROVED on 2026-11-23 with **Direction A: Signal City** · ✅ **V2.1 amendment (Signal City Live) APPROVED on 2026-11-23**, see [the end of this document](#v21-amendment--signal-city-live)
 **Builds on:** [RESEARCH.md](RESEARCH.md) · **Feeds:** [DESIGN.md](DESIGN.md)
 
 ## Approved decisions
@@ -114,3 +114,148 @@ A master bus with a gentle compressor (`DynamicsCompressorNode`) keeps levels co
 
 - **B · Pocket Phosphor.** An amber handheld LCD with a dancing sprite character and chiptune sounds. It had the highest art cost (about 12 sprite frames), and its track-select model hid three of the four tracks. We kept one idea from it: strict glyph-per-track identity and a living idle state.
 - **C · Night Garden.** A pattern that "plants" a garden which grows each loop. It was the most original, but it carried more sprite and state work and a weaker "instrument" framing. Its accumulation idea lives on in the stretch above.
+
+
+---
+
+## V2.1 Amendment — Signal City Live
+
+**Status:** ✅ APPROVED for implementation on 2026-11-23 (final visual sign-off): revised sprites, crowd = dark bodies + violet hands, composition, motion personalities.
+**Source:** [V2_DIRECTIONS.md](V2_DIRECTIONS.md) (Direction A) · **Positioning:** *A tiny pixel world that performs the beat you make.*
+**Reference renders:** the composition preview (rendered from the real `src/scene/city.ts` on the 160×50 grid). The coordinates and sprites below are the ones the preview used.
+
+Everything above this section stays in force unless a row in the **Change register** says otherwise.
+
+### Guiding rule
+
+**The city is the hero.** The lit windows, the BIT sign, and the street are the visual anchors. Performers are **dark silhouettes** that recede into the city at rest and **only brighten when their instrument sounds**. Color still appears only where sound is (V1 rule).
+
+### Change register (what this amendment changes in the approved V1 direction)
+
+| # | V1 decision | V2.1 change | Type |
+|---|---|---|---|
+| C1 | One layer per instrument (ground, windows, sky, sign) | Each instrument also gets a **performer**. All V1 layer reactions stay underneath (skyline drop, street flash, antenna, star twinkle, sign flicker). | Extends |
+| C2 | Snare lights 3–6 random small windows | Snare lights **one apartment window with a resident** plus **3** small windows | **Modifies** |
+| C3 | While playing, the city is lit only by hits | While playing, **8 ambient windows** glow at **30% amber**. Snare hits are full amber plus a resident, so they stay clearly distinct. Stopped stays dark (V1 unchanged). | **Modifies** |
+| C4 | Blackout on Clear was a stretch goal | **Blackout is core** in V2.1 | Promotes |
+| C5 | "Warm-up" stretch | **Deferred** (C3 covers "the city is alive") | Defers |
+| C6 | Palette | Adds performer tokens (below). No existing token changes. | Extends |
+| C7 | City geometry | Adds a power line and **3 apartment windows formed by merging existing 2×2 window blocks** (the gaps between four small windows are filled). **No building is moved or resized.** Static change vs V1 idle: 186 of 8,000 px (2.3%), all additions. | Extends |
+
+### Composition (exact, 160×50 logical px)
+
+| Element | Position (logical px) | Size | Notes |
+|---|---|---|---|
+| **Stomper** (kick) | top-left at (19, 32), feet on y = 43 | 9×12 | Front-left on the street, in front of building 2. It's the only performer **not** shifted by the skyline drop (it causes the drop). |
+| **Rooftop Crowd** (clap) | 4 figures at x = 47, 52, 57, 62, standing on building 4's roof (y = 14) | 4×4 each (6 tall on clap) | Left of the tower. The antenna (x = 77) stays unobstructed. |
+| **Power line** | (117, 17) → (138, 19), sag 3 px | 1 px | Between buildings 7 and 9. Color `#2e313a`. |
+| **Wire Birds** (hi-hat) | x = 120, 125, 130, 134, sitting on the wire | 4×3 each | |
+| **Apartment windows** (snare) | (16, 22) building 2 · (94, 26) building 6 · (149, 21) building 9 | 6×6 each | Each is a 2×2 block of existing V1 windows merged into one window |
+| **Ambient windows** | 8 fixed V1 windows chosen by seeded random. Never on the tower, apartment windows, or behind the Stomper. | 2×2 | 30% amber while playing |
+| Tower, BIT sign, antenna, lamps, street | Unchanged (V1) | — | — |
+
+**Hierarchy check (from the preview):**
+- **Idle:** the dark city leads, with one blinking window. Performers are rim-lit silhouettes.
+- **Between hits:** the ambient windows lead.
+- **Strong beat:** the Stomper (ink), the snare window (amber), and the BIT sign (violet) carry the frame. The crowd adds only small violet hand pixels.
+
+### Performers: sprites (final, from the preview)
+
+Legend: `#` body · `c` visor · `V` hand accent · `e`/`E` bird eye · (`.` transparent). For residents, `#` is the `--void` silhouette on the amber window.
+
+```
+STOMPER 9×12
+ idle          ready         HIT           land (recovery)
+ .........     ...###...     .........     .........
+ ...###...     ..#####..     ...###...     ...###...
+ ..#ddd#..     ..#ccc#..     ..#CCC#..     ..#ccc#..
+ ..#####..     ..#####..     ..#####..     ..#####..
+ .#######.     .#######.     #########     .#######.
+ #.#####.#     #.#####.#     ..#####..     #.#####.#
+ #.#####.#     #.#####.#     ..#####..     ..#####..
+ ..#####..     ..#####..     .##...##.     ..#####..
+ ..##.##..     ..##.##..     .##...##.     .##..##..
+ ..##.##..     ..##.##..     .##...##.     .##..##..
+ ..##.##..     ..##.##..     .##...##.     .##..##..
+ .###.###.     .###.###.     ###...###     .###.###.
+               (+2 dust px each side on HIT, 1 on land)
+
+RESIDENT 6×6 (inside a lit window)      BIRD 4×3                 CROWD FIGURE 4 wide
+ lit/rest     CHEER                      asleep  ready  HOP(+1px)  sit    ready   half    FULL
+ ......       #.##.#                     ....    .##.   .##.       ....   .##.    V..V    V..V
+ ..##..       #.##.#                     .##.    #e##   #E##       .##.   .##.    .##.    #..#
+ ..##..       .#..#.                     ####    .#..   .#..       ####   ####    .##.    .##.
+ ......       .####.                                                      ####    ####    .##.
+ .####.       .####.                                                              ####    ####
+ .####.       ......                                                                      ####
+```
+*The resident CHEER pose is the current best. Final tuning happens during implementation, with a recognizable reaction prioritized over anatomy (your decision 5).*
+
+### Color and lighting
+
+| Token (new) | Value | Use |
+|---|---|---|
+| `--actor` | `#3b3f4a` | Performer body at rest (dark silhouette) |
+| `--actor-rim` | `#6e727c` | 1 px rim light on body pixels whose top or left neighbor is empty |
+| `--actor-mid` | `#6e727c` | Body during recovery ("cooling down") |
+| `--actor-hi` | `#e6e1d3` (= `--ink`) | Stomper and hopping bird on their hit frames only |
+| `--visor-idle` / `--visor-ready` | `#2e2224` / `#4a2826` | Stomper visor when stopped / playing. Near-black red, not a glow. |
+| `--wire` | `#2e313a` | Power line |
+
+- **Hit accents use track colors only:** coral visor (kick), amber window (snare), teal bird eye (hi-hat), **violet hands (clap)**.
+- **The crowd stays dark on clap.** The celebration reads through arm poses and violet hand pixels, and the bodies never turn ink. The BIT sign stays the brightest violet element.
+- **Ambient windows (C3):** amber at 30%. Snare light runs at 100% → 60% → 30% over 3 steps (V1 fade), so a snare is always brighter than ambient at its onset.
+- There's no new glow (the V1 single-glow rule holds).
+
+### Motion personalities and timing
+
+All durations are measured from the moment the sound is heard. `s` = the step length of the triggering event. Onsets render on the next frame.
+
+| Instrument | Character | Pose sequence | Timing | At 104 BPM (s = 144 ms) | At 180 BPM (s = 83 ms) |
+|---|---|---|---|---|---|
+| **Kick** | **Heavy, grounded.** All motion is downward: it holds the impact, then rises in two stages. | HIT (squash, wide stance, dust, ink body, coral visor) → LAND (upright, mid tone, 1 dust px) → ready | hit `min(167 ms, 0.65 s)` · land `min(83 ms, 0.3 s)` | 94 ms → 43 ms | 54 ms → 25 ms |
+| **Snare** | **Sharp, expressive.** Snaps on and snaps off, with no in-between frame. | CHEER (arms up, window full amber) → lit bust → light fades | cheer `min(83 ms, 0.4 s)` · light 100/60/30% over `3 s` | 58 ms, light to 432 ms | 33 ms, light to 249 ms |
+| **Hi-hat** | **Quick, nervous.** The shortest pose in the scene; the neighbors flinch. | The next bird in turn HOPS (+1 px, ink, teal eye) while its neighbors' eyes flick bright → ready | hop `min(50 ms, 0.35 s)` | 50 ms | 29 ms |
+| **Clap** | **Celebratory, restrained.** Arms rise, hold, and lower, with a slight left-right stagger. | HALF (hands above head) → FULL (arms up) → HALF → ready. Figures 2 and 4 start `min(40 ms, 0.25 s)` later. | half `min(83 ms, 0.35 s)` · full until `0.9 s` | 50 → ~130 ms → 180 ms | 29 → ~75 ms → 104 ms |
+| Skyline drop (V1) | Kept as the kick's world response | 1 px drop | `min(167 ms, 0.7 s)` | 101 ms | 58 ms |
+
+**Pixel-art rules:**
+- Integer positions only.
+- At most 1 px of displacement (except pose swaps).
+- No sub-pixel, smoothing, or easing.
+- Pose holds are quantized as above.
+- A retrigger always restarts the pose.
+- Performers never move without a sound event.
+
+### Signature moments
+
+| Moment | Trigger | Sequence (normal motion) | Reduced motion |
+|---|---|---|---|
+| **City switches on** | Play | Over 4 pixel frames (~330 ms), alongside the first beats and never delaying them: the visor goes from idle to ready, the birds open their eyes left→right, the crowd stands, ambient windows fade in left→right | Everything at once, in 1 frame |
+| **Blackout** | Clear while playing | Ambient and lit windows go off column by column, left→right, over 4 frames. The sign goes dark. Performers stay ready. The lamps keep sweeping. When the pattern has a note again, the ambient windows return over 2 frames. | Instant off and instant on |
+| **Groove ripple** | Groove while playing | Ambient windows flash once left→right (3 frames) | None |
+| **Power down** | Stop | Performers go to idle over 2 frames, then V1 idle (one blinking window) | Instant. No blink (V1). |
+| **Audition performs** | A step toggled on while stopped | Its performer plays its hit once, timed to the audition sound. Playback doesn't start. | Pose/color only |
+
+### Reduced motion
+
+`prefers-reduced-motion: reduce`:
+- **No translation:** no skyline drop, no bird hop, no Stomper squash (the Stomper shows the LAND/mid-tone body with a coral visor instead), and no clap stagger.
+- **Allowed:** pose swaps within the sprite's footprint (crowd hands at HALF only, resident cheer) and color changes.
+- **Removed:** sign flicker, star twinkle, idle blink, ripple, and multi-frame switch-on/blackout.
+- **Kept:** the playhead lamps. Every hit still produces a visible change for its instrument.
+
+### Responsive coexistence and mobile
+
+- The layout is unchanged (scene → transport → grid). The canvas stays 160×50 at integer device-pixel scale. **Performers aren't enlarged, and city proportions don't change.**
+- **At 2× (phones), verified in the preview:**
+  - The Stomper reads clearly (18×24 CSS px).
+  - The birds and crowd read through motion and accent pixels.
+  - The resident window reads as an amber block with a reaction.
+  - There are no scaling artifacts: frames are drawn at exactly 2 device px per logical px.
+- The grid track glyphs remain the non-color identity, and the grid doesn't animate performers.
+
+### Deliberately not added
+- Extra characters, buildings, scenes, weather, parallax, or camera moves.
+- Idle "dancing". Performers move only on sound.
+- New glow, and colors outside the token set.

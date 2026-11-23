@@ -1,7 +1,7 @@
 # BEAT.BIT — Experience Design Specification
 
 **Day 001 / 100 Days of Digital Craft** · Stage 3 of 4
-**Status:** ✅ APPROVED on 2026-11-23. All D1–D7 accepted as recommended. Step cells must carry the 8-bit style wherever it can be themed.
+**Status:** ✅ V1 APPROVED on 2026-11-23. All D1–D7 accepted as recommended. Step cells must carry the 8-bit style wherever it can be themed. · ✅ **V2.1 amendment APPROVED on 2026-11-23**, see [V2.1 Amendment](#v21-amendment--signal-city-live-interaction-specification)
 **Builds on:** [RESEARCH.md](RESEARCH.md) · [ART_DIRECTION.md](ART_DIRECTION.md) (✅ Signal City)
 
 ---
@@ -357,3 +357,121 @@ src/
 
 ## 15. Explicitly out of scope for Day 001
 Multiple presets beyond SIGNAL, mute/solo, swing, per-track volume, local-storage save, share URLs, audio export, paint-drag editing, accents/velocity, MIDI, and a richer multi-scene world. The stretch goals (only after MVP): global shortcuts, warm-up/blackout, Clear undo toast.
+
+
+---
+
+## V2.1 Amendment — Signal City Live: Interaction Specification
+
+**Status:** ✅ APPROVED for implementation on 2026-11-23 (revised sprites, quiet crowd, motion personalities) · **Art direction:** [ART_DIRECTION.md → V2.1 Amendment](ART_DIRECTION.md#v21-amendment--signal-city-live) · **Roadmap:** [V2_ROADMAP.md](V2_ROADMAP.md) V2.1
+
+**Scope:** performers, scene moments, and their interaction rules. **Not in V2.1:** curated presets (V2.2), sharing (V2.3), and mobile cell sizing (V2.4). The sequencer, audio engine, scheduler, transport controls, and 8bitcn components are **unchanged**, except where §V3 adds one event channel.
+
+### V1. Change register (sections of this document affected)
+
+| V1 section | Change | Type |
+|---|---|---|
+| §11 Scene specification | Adds performers, apartment windows, power line, ambient windows, and scene moments (see ART_DIRECTION change register C1–C7) | Extends / modifies C2, C3 |
+| §7.1 Step toggle | Audition while stopped now also **performs** (the scene reacts to the audition sound) | Extends |
+| §7.2 Transport | Play → switch-on. Stop → power-down. | Extends |
+| §6 Controls (Clear, Groove) | Clear while playing → blackout. Groove while playing → ripple. Behavior of the controls themselves is unchanged. | Extends |
+| §10 Accessibility | Adds a static text description of the scene for screen readers | Extends |
+| §11 "Stretch: warm-up/blackout" | Blackout becomes core. Warm-up is deferred. | Modifies |
+| §14 Acceptance | Adds the V2.1 criteria (§V7) | Extends |
+
+### V2. Interaction specification
+
+| User action | Audio | Grid | Scene | Live region |
+|---|---|---|---|---|
+| **Play** (from stopped) | Unchanged | Unchanged | **Switch-on** (4 frames, alongside the first beats), then performers respond to steps | "Playing at N BPM" (unchanged) |
+| **Stop** | Unchanged (immediate silence) | Playhead cleared | **Power-down** (2 frames), then V1 idle | "Stopped" (unchanged) |
+| **Step heard** (playing) | — | Playhead + hit flash (V1) | The performer for each sounding track hits. V1 layer reactions underneath. | — |
+| **Toggle on** while stopped | Audition (V1) | Cell on | **The performer plays its hit once**, at the moment the audition sound is heard | — |
+| **Toggle on/off** while playing | Heard on the next pass (V1) | Cell flips at once | No immediate reaction. The performer reacts when the step plays. | — |
+| **Clear** while playing | Silence from the next step | All off | **Blackout** (4 frames). The city stays dark, the lamps keep sweeping, performers stay ready. The first added note → ambient windows return (2 frames). | "Pattern cleared" (unchanged) |
+| **Clear** while stopped | — | All off | No scene change (already idle) | Unchanged |
+| **Groove** while playing | New pattern from the next step | Updated | **Ripple** (3 frames). If coming from blackout, the city switches back on. | Unchanged |
+| **Groove** while stopped | — | Updated | No scene change | Unchanged |
+| **Tempo change** | From the next step (V1) | — | Pose durations follow the new step length from the next event | — |
+| **Tab hidden** (auto-stop) | Stop | Cleared | Power-down | "Stopped: tab hidden" |
+| **Audio blocked** (silent mode) | None | Plays | **Performers still perform** on the silent clock, so the world isn't dead | Unchanged |
+| **Reduced motion** on | — | V1 rules | ART_DIRECTION V2.1 reduced-motion rules | — |
+
+### V3. Timing and event rules (the non-negotiables)
+
+1. **Performers move only in response to sound events**, and nothing else creates rhythmic motion. The two kinds of sound event are:
+   - (a) scheduled `StepEvent`s drained by the render loop at the moment they're heard (V1);
+   - (b) **audition events** (new): when an audition plays at audio time `t`, an event is queued and published by the same render loop when `t` is heard.
+2. **Non-rhythmic cues** (switch-on, power-down, blackout, ripple) come from transport/UI state changes. They carry no beat timing, and their durations are fixed pixel-frame counts.
+3. **Pose durations** derive from the triggering event's `duration` (the step length at schedule time), so tempo changes stay musically correct. The per-instrument formulas (the **motion personalities**: kick heavy, snare sharp, hi-hat quick, clap restrained) are defined in ART_DIRECTION V2.1 "Motion personalities and timing", and they're the single source of truth for pose timing.
+3a. **Hierarchy rule:** performers render as dark silhouettes (`--actor` + rim) except during their instrument's hit window. The crowd body **never** turns ink. Its clap is arm poses plus violet hand pixels only.
+4. **One render loop.** Step events → audition events → cues → `draw(now)`, all in the same frame, with timestamps in the frame timebase (Phase 0, D8).
+5. **Stop clears everything** pending (step queue, audition queue, active poses), same as V1.
+
+### V4. Architecture (implementation guidance, no new dependencies)
+
+```
+src/scene/
+  city.ts         Orchestrator: static layers, V1 reactions, moments state machine, draw order
+  sprites.ts      Pixel frames as string arrays → cached ImageBitmaps/canvases; draw helper
+  performers.ts   Stomper, Residents, Birds, Crowd. Each is pure state + draw:
+                    hit(now, stepMs)            // called from step/audition events
+                    pose(now) → 'idle'|'ready'|'hit'|'recovery'   (pure, unit-tested)
+                    draw(ctx, now, { dy, reducedMotion, lit })
+```
+
+**Scene moments state machine:**
+
+```
+idle ──Play──► switchingOn ──4 frames──► on ◄──note returns── dark
+  ▲                                       │  ╲──Clear──► blackingOut ──4 frames──► dark
+  └───────── poweringDown ◄──Stop─────────┴────────────────────────────────────────┘
+```
+
+**Hook additions** (`useSequencer`; no change to the scheduler or engine):
+- `onCue(fn)` channel: `'cleared' | 'groove' | 'became-non-empty'`. These are emitted by the reducer-side actions.
+- An audition event queue drained by the existing render loop.
+
+**Performance:** no per-frame allocations in performer draw paths, and at most ~40 `fillRect` calls per performer per frame. The canvas stays at 160×50.
+
+### V5. Accessibility
+
+- The canvas stays `aria-hidden`. All state is still conveyed by the grid, controls, and live region. **No new announcements** (performers would be noise for screen reader users).
+- **New:** a static, visually-hidden description next to the scene: *"Signal City: a pixel city that performs your beat. A robot stomps on the kick, a resident waves from a window on the snare, birds hop on the hi-hat, and a rooftop crowd claps on the clap."* This lets non-sighted users know what sighted users are seeing.
+- Reduced motion per ART_DIRECTION V2.1. Contrast: performer bodies 5.07:1 against buildings and 5.26:1 against the sky [computed].
+
+### V6. Verification plan (Chrome, as in V1 and Phase 0)
+
+| Check | Method |
+|---|---|
+| Each performer reacts **only** to its drum | A canvas pixel probe over each performer's bounding box, over 2 bars of SIGNAL (expected steps: kick 0,6,8,13 · snare 4,12 · hat 0,2,4,6,8,10,12,14,15 · clap 12,15) |
+| Reactions land on the heard step | Probe change observed in the same frame the grid playhead reaches that step (±1 frame) |
+| Audition performs | Toggle a kick on while stopped → the Stomper region changes once, then returns |
+| Switch-on / power-down / blackout / ripple | Region probes over time: complete within 4 frames (~330 ms) |
+| Blackout recovery | Clear → dark; toggle a step on → ambient windows return |
+| Tempo | At 60, 104, and 180 BPM: poses complete within one step, with no stuck hit poses |
+| Rapid Play/Stop ×21 | No stuck poses; the state ends idle or playing as expected |
+| Motion personalities | Probe each performer region at 0/25/50/85/130/200/300 ms after a hit at 104 and 180 BPM. Pose sequences and hold times match the ART_DIRECTION timing table (±1 frame). |
+| Quiet crowd | During a clap, crowd-region pixels contain no `--ink` values. Violet appears only at hand positions. |
+| Hierarchy | Idle and between-hits screenshots: no performer pixel brighter than `--actor-rim`, except hit windows |
+| Reduced motion | No pixel translation in the Stomper/bird regions, no skyline drop, moments instant |
+| Silent mode | Performers still react with no audio |
+| Keyboard and existing behavior | The Phase 0 regression suite (timing, tempo, rapid toggle, focus rings, grid keyboard) |
+| Unit | `pose(now)` transitions per performer, the moments state machine, and the audition queue drain |
+| Visual review | Screenshots at desktop 6× and mobile 2×, reviewed by you |
+
+### V7. V2.1 acceptance criteria
+
+- [ ] Four performers exist as specified, each reacting **only** to its drum, on the step it's heard (probe-verified).
+- [ ] Auditioning a step while stopped makes its performer react in time with the sound.
+- [ ] Switch-on, power-down, blackout (with recovery), and ripple behave as specified and finish within 4 pixel frames.
+- [ ] Empty, sparse (1 note), SIGNAL, and dense (all 64 on) patterns all look intentional, reviewed in screenshots.
+- [ ] At 180 BPM no pose sticks or blurs, and at 60 BPM no pose lingers past its step.
+- [ ] Reduced motion: no translation, flicker, or multi-frame moments, and every hit is still visible.
+- [ ] Performers are legible at 2× (mobile) and 6× (desktop) with no scaling artifacts (integer device-pixel scale). You approve the screenshots.
+- [ ] Motion personalities match the timing table at 104 and 180 BPM: kick holds then lands, snare snaps, hi-hat is the shortest pose with a neighbor flinch, clap rises and lowers with a stagger.
+- [ ] The city stays the hero: at rest, performers are dark rim-lit silhouettes. During a clap the crowd bodies stay dark (violet hands only) and the BIT sign remains the brightest violet element.
+- [ ] The composition matches ART_DIRECTION V2.1 coordinates. No building moved or resized, and no performer enlarged.
+- [ ] No regressions: 8/8 existing tests pass plus new unit tests, the Phase 0 Chrome regression suite passes, and there are no console errors.
+- [ ] The audio engine, scheduler, and sequencer grid are unchanged apart from the two hook channels in §V4.
+- [ ] BUILD_STATUS.md is updated with what was verified and how.
